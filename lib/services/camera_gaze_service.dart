@@ -51,7 +51,30 @@ class CameraGazeService {
   bool _stopping = false;
 
   static const int _frameSkip = 2;
-  static const ResolutionPreset _resolution = ResolutionPreset.low;
+
+  /// Capture modes to try, cheapest first.
+  ///
+  /// Windows negotiates a mode by requiring `frame_height <= max` for the
+  /// preset — 240px for `low` — at 15fps or better (see
+  /// `FindBestMediaType` in capture_controller.cpp). Plenty of webcams have no
+  /// mode that small; their lowest is 360p or 480p. When nothing matches, the
+  /// plugin does not fall back, it fails outright with "Failed to initialize
+  /// video preview", and `availableCameras()` gives no warning because
+  /// enumeration never negotiates a mode.
+  ///
+  /// Face detection is happy with a small frame, so try low first for the CPU
+  /// saving, then climb until the hardware agrees to something.
+  static const List<ResolutionPreset> _resolutionLadder = <ResolutionPreset>[
+    ResolutionPreset.low, // 240p
+    ResolutionPreset.medium, // 480p
+    ResolutionPreset.high, // 720p
+    ResolutionPreset.veryHigh, // 1080p
+  ];
+
+  ResolutionPreset? _activeResolution;
+
+  /// The mode the camera actually accepted, once running.
+  ResolutionPreset? get activeResolution => _activeResolution;
 
   /// Sampling cadence. Faster while the screen is exposed, because that is when
   /// a missed look-away actually costs something; slower while already
@@ -88,20 +111,8 @@ class CameraGazeService {
     final CameraDescription camera =
         front.isNotEmpty ? front.first : cameras.first;
 
-    _controller = CameraController(
-      camera,
-      _resolution,
-      enableAudio: false,
-      imageFormatGroup: Platform.isWindows ? null : ImageFormatGroup.yuv420,
-    );
-
-    try {
-      await _controller!.initialize();
-    } catch (e) {
-      _controller = null;
-      onError?.call('Failed to initialize camera: $e');
-      return;
-    }
+    _controller = await _initializeWithFallback(camera);
+    if (_controller == null) return; // onError already reported
 
     if (Platform.isWindows) {
       await _startWindows();
@@ -115,6 +126,46 @@ class CameraGazeService {
       );
       await _controller!.startImageStream(_onImage);
     }
+  }
+
+  /// Opens the camera at the first mode it will accept.
+  ///
+  /// Each failed attempt is disposed before the next is tried — an undisposed
+  /// controller keeps the device open, so skipping that would make every
+  /// subsequent attempt fail with the camera already in use.
+  Future<CameraController?> _initializeWithFallback(
+    CameraDescription camera,
+  ) async {
+    Object? lastError;
+
+    for (final ResolutionPreset preset in _resolutionLadder) {
+      final CameraController candidate = CameraController(
+        camera,
+        preset,
+        enableAudio: false,
+        imageFormatGroup: Platform.isWindows ? null : ImageFormatGroup.yuv420,
+      );
+      try {
+        await candidate.initialize();
+        _activeResolution = preset;
+        debugPrint('SafeScreen: camera opened at $preset');
+        return candidate;
+      } catch (e) {
+        lastError = e;
+        debugPrint('SafeScreen: $preset rejected by camera ($e)');
+        try {
+          await candidate.dispose();
+        } catch (_) {}
+      }
+    }
+
+    onError?.call(
+      'The camera refused every capture mode SafeScreen tried.\n\n'
+      'This usually means another app is already using it — close Teams, Zoom, '
+      'or your browser and try again. Check Windows camera privacy settings '
+      'too.\n\nLast error: $lastError',
+    );
+    return null;
   }
 
   // ── Windows ───────────────────────────────────────────────────────────────
@@ -351,6 +402,7 @@ class CameraGazeService {
     _controller = null;
     _faceDetector = null;
     _isProcessing = false;
+    _activeResolution = null;
 
     // Last line of defence: destroy any capture file that outlived its read.
     await _frameStore.sweep();

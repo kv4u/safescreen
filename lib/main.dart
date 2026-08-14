@@ -491,8 +491,12 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
             ),
           ),
           const SizedBox(width: 10),
+          // Deliberately "detected", not "ready": this check only enumerates
+          // devices. Whether the camera will actually open at a usable capture
+          // mode is not known until protection starts, and claiming readiness
+          // here made a later failure look like a bug rather than a limitation.
           const Text(
-            'Camera ready',
+            'Camera detected',
             style: TextStyle(
               color: _green,
               fontSize: 13,
