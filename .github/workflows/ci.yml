@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Only the newest run per branch matters; cancel superseded ones.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-and-test:
+    name: Analyze & test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Pinned: camera_windows is held at 0.2.6+2 because later versions
+          # require Dart >= 3.8. See pubspec.yaml.
+          flutter-version: '3.29.x'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  build:
+    name: Build Windows
+    runs-on: windows-latest
+    needs: analyze-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.x'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release
+        run: flutter build windows --release
+
+      # Proves the tree still compiles on Windows; the artifact here is for
+      # debugging CI, not for distribution. Released binaries come from
+      # release.yml, which builds from a tag.
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: safescreen-windows-ci
+          path: build/windows/x64/runner/Release/
+          retention-days: 7

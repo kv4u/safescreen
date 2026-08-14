@@ -1,0 +1,15 @@
+# Normalise line endings in the repository; check out native on each platform.
+* text=auto eol=lf
+
+# Windows-native build files are checked out CRLF.
+*.rc          text eol=crlf
+*.sln         text eol=crlf
+*.vcxproj     text eol=crlf
+*.manifest    text eol=crlf
+
+*.png         binary
+*.jpg         binary
+*.jpeg        binary
+*.ico         binary
+*.ttf         binary
+*.tflite      binary
