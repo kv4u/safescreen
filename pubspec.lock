@@ -68,10 +68,9 @@ packages:
   camera_windows:
     dependency: "direct main"
     description:
-      name: camera_windows
-      sha256: c4339d71bc4256993f5c8ae2f3355463d830a5cb52851409ab1c627401c69811
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/camera_windows"
+      relative: true
+    source: path
     version: "0.2.6+2"
   characters:
     dependency: transitive

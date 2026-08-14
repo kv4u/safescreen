@@ -36,6 +36,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   camera: ^0.11.1
   camera_windows: ^0.2.6+2   # Windows webcam (must be added explicitly; 0.2.6+3+ needs Dart 3.8)
+  # NOTE: camera_windows is overridden below with a vendored fork. See
+  # dependency_overrides and packages/camera_windows/FORK_NOTICE.md.
   google_mlkit_face_detection: ^0.13.1
   google_mlkit_commons: ^0.11.0
   # Android: overlay on top of other apps
@@ -49,6 +51,16 @@ dependencies:
   # Windows (and optional): face detection (ML Kit is Android/iOS only)
   face_detection_tflite: ^4.0.0
   permission_handler: ^11.3.1
+
+# Upstream camera_windows writes every captured frame to the user's Pictures
+# folder, which is typically OneDrive-synced. SafeScreen samples the camera
+# several times a second and discards each frame immediately, so that default
+# would seed the user's cloud storage with thousands of photographs of them.
+# The fork changes the capture destination to a private %TEMP% subdirectory and
+# nothing else. See packages/camera_windows/FORK_NOTICE.md.
+dependency_overrides:
+  camera_windows:
+    path: packages/camera_windows
 
 dev_dependencies:
   flutter_test:

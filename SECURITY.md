@@ -16,60 +16,70 @@ of your problems.
 
 ---
 
-## Known issue: captured frames are written to your Pictures folder
+## How camera frames are handled
 
-**This is the most important thing to know about the current release.**
+**This is the most important thing to understand about how SafeScreen works.**
 
-The Windows camera plugin SafeScreen depends on (`camera_windows`) has no
-image-streaming API. The only way to obtain a frame is `takePicture()`, and the
-plugin's native code writes that frame to disk before returning a path:
+The Windows camera plugin (`camera_windows`) has no image-streaming API. The
+only way to obtain a frame is `takePicture()`, and the plugin's native code
+writes that frame to disk before returning a path. Dart never gets a chance to
+intercept it.
+
+Upstream, that path is inside `FOLDERID_Pictures` — your Pictures library:
 
 ```cpp
-// camera_plugin.cpp
+// camera_plugin.cpp, upstream
 SHGetKnownFolderPath(FOLDERID_Pictures, KF_FLAG_CREATE, nullptr, &known_folder_path);
-...
-return path + "\\" + "PhotoCapture_" + GetCurrentTimeString() + ".jpeg";
 ```
 
-So every gaze sample becomes a JPEG in **your Pictures library** — a folder that
-is typically Windows Search–indexed, thumbnailed by Explorer, and **synced to
-OneDrive**.
+A gaze detector sampling several times a second would therefore write thousands
+of photographs of you into a folder that is Windows Search–indexed, thumbnailed
+by Explorer, and — on most consumer machines — **synced to OneDrive**, meaning
+uploaded off the device.
 
 ### What SafeScreen does about it
 
-The write happens in native code before any Dart runs, so it cannot be
-prevented from this side. What `lib/services/secure_frame_store.dart` does
-instead:
+Two independent layers:
+
+**1. Frames never go somewhere synced.** SafeScreen vendors a forked
+`camera_windows` whose only change is the capture destination: a private
+`%TEMP%\SafeScreenFrames` directory instead of the Pictures library. `%TEMP%` is
+not a sync target and is not part of the user's media libraries. The fork is a
+single function, documented in
+[`packages/camera_windows/FORK_NOTICE.md`](packages/camera_windows/FORK_NOTICE.md).
+
+**2. Frames do not survive being read.** `lib/services/secure_frame_store.dart`:
 
 | Mitigation | Effect |
 |---|---|
-| Read and destroy each file immediately | Reduces the file's lifetime to roughly the duration of one read |
-| Overwrite with zeros before unlinking | The JPEG is not left intact in free space for later recovery |
+| Read and destroy each file immediately | Lifetime is roughly the duration of one read |
+| Overwrite with zeros before unlinking | The JPEG is not left intact in free space |
 | Destroy the file even if decoding fails | A frame we could not use is still a photograph of you |
 | Track every path handed to us | Nothing is forgotten if a read throws |
 | Sweep on shutdown | Files that outlived a crashed capture are cleaned up |
-| Sample more slowly while already protected | Roughly halves the number of files written while you are away |
+| Sample more slowly while already protected | Roughly halves files written while you are away |
 
 The status screen shows a live count of erased capture files, so this is
-observable rather than something you have to take on faith.
+observable rather than something you take on faith.
 
-### What that still does not fix
+### What is still not solved
 
-**This is a mitigation, not a solution.** A sync client or indexer that reads
-the file during the few milliseconds it exists can still copy it, and once
-OneDrive has uploaded a frame, deleting the local copy does not retract it. On
-copy-on-write filesystems, SSDs with wear levelling, or volumes with VSS
-snapshots, the zeroing pass may not overwrite the original blocks at all.
+**Frames touch the disk.** Briefly, in a non-synced directory, overwritten and
+deleted immediately — but they touch it. Specifically:
 
-**If this matters to your threat model, do not run the current release.** Wait
-for in-memory capture, or exclude your Pictures folder from OneDrive first.
+- On copy-on-write filesystems, wear-levelled SSDs, or volumes with VSS
+  snapshots, the zeroing pass may not overwrite the original blocks.
+- Anything running as your user could read `%TEMP%\SafeScreenFrames` during the
+  window a file exists. (Anything running as your user could also just open the
+  webcam directly, so this is not much of an escalation.)
+- A backup agent configured to include `%TEMP%` would capture frames. This is an
+  unusual configuration, but check yours if it matters.
 
-### The actual fix
+### The complete fix
 
 Replace `takePicture()` with a native Media Foundation capture path that
-delivers frames into memory and never touches the filesystem. This is tracked
-as the top roadmap item. Until it lands, treat the mitigations above as harm
-reduction.
+delivers frames into memory and never touches the filesystem. This is the top
+roadmap item, and it would let the fork be dropped entirely.
 
 ---
 

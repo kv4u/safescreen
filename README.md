@@ -22,12 +22,15 @@ not.
 
 ---
 
-> [!IMPORTANT]
-> **Read [SECURITY.md](SECURITY.md) before you install this.** Because of a
-> limitation in the Windows camera plugin, captured frames pass briefly through
-> your Pictures folder — which on most machines syncs to OneDrive. SafeScreen
-> erases each one immediately, but cannot prevent the write. If that matters to
-> your threat model, wait for in-memory capture.
+> [!NOTE]
+> **How frames are handled.** The Windows camera plugin has no streaming API, so
+> each frame is written to disk before SafeScreen can see it. SafeScreen ships a
+> [forked plugin](packages/camera_windows/FORK_NOTICE.md) that redirects those
+> writes away from your (OneDrive-synced) Pictures folder into private temp
+> storage, then overwrites and deletes each file the instant it is read. Frames
+> stay on your machine and do not outlive their read — but they are written
+> briefly. [SECURITY.md](SECURITY.md#how-camera-frames-are-handled) has the
+> complete account.
 
 ## What it does
 
@@ -74,8 +77,9 @@ gh attestation verify SafeScreen-windows-x64.zip --repo kv4u/safescreen
 
 ```
 webcam ──► takePicture ──► SecureFrameStore ──► BlazeFace (TFLite, fast mode)
-                                │                        │
-                          erase the file           6 keypoints
+             (to private        │                        │
+              temp, not      erase the file        6 keypoints
+              Pictures)
                                                          │
                                                  HeadPoseEstimator
                                                   yaw · roll · pitch
@@ -114,8 +118,9 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 
 - **Only the primary monitor is covered.** Other displays stay visible when you
   look away. Roadmap item #2.
-- **Frames touch disk.** See the warning above and
-  [SECURITY.md](SECURITY.md). Roadmap item #1.
+- **Frames touch disk briefly.** In private temp storage, erased immediately —
+  but written. In-memory capture is roadmap item #1. See
+  [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
 - **Not a lock screen.** SafeScreen does not authenticate anyone and will not
   stop someone using your keyboard. Use `Win`+`L`.
 - **Poor lighting degrades detection.** Backlighting in particular. The failure
@@ -126,7 +131,7 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 ## Roadmap
 
 1. **In-memory capture** via a native Media Foundation plugin, removing disk
-   writes entirely.
+   writes entirely and letting the vendored `camera_windows` fork be dropped.
 2. **Multi-monitor blackout** spanning the full virtual desktop.
 3. Optional session lock after a configurable absence.
 4. Start-with-Windows option.
