@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+  # Required for build provenance attestation.
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    name: Build and publish Windows release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.x'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # A release must never ship code that fails the checks.
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release
+        run: flutter build windows --release
+
+      - name: Package
+        id: package
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag }}"
+          if (-not $tag) { $tag = "${{ github.ref_name }}" }
+          $name = "SafeScreen-windows-x64"
+          New-Item -ItemType Directory -Force dist | Out-Null
+
+          Compress-Archive `
+            -Path build/windows/x64/runner/Release/* `
+            -DestinationPath "dist/$name.zip"
+
+          # Ship the docs a user needs before running an unsigned binary.
+          Copy-Item README.md, LICENSE, SECURITY.md, PRIVACY.md dist/
+
+          $hash = (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash
+          "$hash  $name.zip" | Out-File -FilePath dist/SHA256SUMS.txt -Encoding utf8
+
+          Write-Output "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Output "zip=dist/$name.zip" >> $env:GITHUB_OUTPUT
+          Write-Output "SHA256: $hash"
+
+      # Lets users cryptographically confirm the zip came from this workflow
+      # and this commit, which matters more than usual for an unsigned binary.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: ${{ steps.package.outputs.zip }}
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.package.outputs.tag }}
+          name: SafeScreen ${{ steps.package.outputs.tag }}
+          draft: false
+          generate_release_notes: true
+          files: |
+            dist/SafeScreen-windows-x64.zip
+            dist/SHA256SUMS.txt
+          body: |
+            ## Install
+
+            Download `SafeScreen-windows-x64.zip`, unzip anywhere, run `safe_screen.exe`.
+            Windows 10 (1809+) or 11, x64, plus a webcam. No installer, no admin rights.
+
+            ## ⚠️ Read before installing
+
+            Because of a limitation in the Windows camera plugin, captured frames
+            pass briefly through your **Pictures folder** — which on most machines
+            syncs to OneDrive. SafeScreen overwrites and deletes each one
+            immediately, but cannot prevent the write.
+
+            **[Read SECURITY.md for the full detail](https://github.com/kv4u/safescreen/blob/main/SECURITY.md#known-issue-captured-frames-are-written-to-your-pictures-folder)**
+            before deciding whether this fits your threat model.
+
+            ## Verify your download
+
+            This binary is **not code-signed**, so SmartScreen will warn you.
+            Verify it instead of clicking through:
+
+            ```powershell
+            Get-FileHash .\SafeScreen-windows-x64.zip -Algorithm SHA256
+            ```
+
+            Compare with `SHA256SUMS.txt` below, and check the provenance
+            attestation:
+
+            ```bash
+            gh attestation verify SafeScreen-windows-x64.zip --repo kv4u/safescreen
+            ```
+
+            ## Changes
+
+            See [CHANGELOG.md](https://github.com/kv4u/safescreen/blob/main/CHANGELOG.md).
