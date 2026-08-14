@@ -89,15 +89,17 @@ jobs:
             Download `SafeScreen-windows-x64.zip`, unzip anywhere, run `safe_screen.exe`.
             Windows 10 (1809+) or 11, x64, plus a webcam. No installer, no admin rights.
 
-            ## ⚠️ Read before installing
+            ## How camera frames are handled
 
-            Because of a limitation in the Windows camera plugin, captured frames
-            pass briefly through your **Pictures folder** — which on most machines
-            syncs to OneDrive. SafeScreen overwrites and deletes each one
-            immediately, but cannot prevent the write.
+            The Windows camera plugin has no streaming API, so each frame is
+            written to disk before SafeScreen can see it — by default into your
+            OneDrive-synced Pictures folder. SafeScreen ships a forked plugin
+            that redirects those writes into private temp storage, then
+            overwrites and deletes each file the instant it is read.
 
-            **[Read SECURITY.md for the full detail](https://github.com/kv4u/safescreen/blob/main/SECURITY.md#known-issue-captured-frames-are-written-to-your-pictures-folder)**
-            before deciding whether this fits your threat model.
+            Frames stay on your machine and do not outlive their read, but they
+            are written briefly.
+            **[The complete account is in SECURITY.md](https://github.com/kv4u/safescreen/blob/main/SECURITY.md#how-camera-frames-are-handled)**.
 
             ## Verify your download
 

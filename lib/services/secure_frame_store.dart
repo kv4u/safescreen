@@ -1,29 +1,27 @@
-// Damage control for the Windows capture path.
+// Second line of defence for the Windows capture path.
 //
 // `camera_windows` has no image-stream API. The only way to get a frame is
-// `takePicture()`, and the native plugin writes that frame as a JPEG to
-// FOLDERID_Pictures — the user's Pictures library — before handing back a path
-// (see camera_plugin.cpp, GetFilePathForPicture). Files are named
-// `PhotoCapture_<timestamp>.jpeg`.
+// `takePicture()`, which writes the frame as a JPEG natively and hands back a
+// path. Dart never gets the chance to prevent that write.
 //
-// That folder is Search-indexed, thumbnailed by Explorer, and on most machines
-// synced to OneDrive. A gaze detector sampling several times a second therefore
-// scatters photographs of the user through a cloud-synced directory. For a
-// privacy tool this is the single worst property of the current design.
+// Upstream writes to FOLDERID_Pictures — the user's Pictures library, which is
+// Search-indexed, thumbnailed, and usually OneDrive-synced. SafeScreen vendors a
+// forked plugin that redirects captures to a private `%TEMP%\SafeScreenFrames`
+// directory instead, so frames are never handed to a sync client. See
+// packages/camera_windows/FORK_NOTICE.md.
 //
-// This class cannot prevent the write — it happens natively, before Dart sees
-// anything. What it can do:
+// The fork decides *where* frames land. This class decides *how long they last*:
 //
-//   * shrink the exposure window to the minimum by reading and destroying each
-//     file the instant it appears;
+//   * read and destroy each file the instant it appears;
 //   * overwrite the bytes with zeros before unlinking, so the contents are not
-//     trivially recoverable from free space or lifted by an indexer later;
-//   * account for every file it creates, and sweep survivors on shutdown so a
-//     crash mid-capture does not leave frames lying around.
+//     trivially recoverable from free space;
+//   * account for every path handed to us, on error paths too;
+//   * sweep survivors on shutdown, so a crash mid-capture leaves nothing behind.
 //
-// It cannot close the race entirely. A sync client that reads the file within
-// the few milliseconds it exists may still copy it. The real fix is in-memory
-// capture via a native Media Foundation plugin — see SECURITY.md.
+// Both layers are needed and neither is sufficient alone. Frames still touch the
+// disk, however briefly, and zeroing is best-effort on copy-on-write filesystems
+// and wear-levelled SSDs. The complete fix is in-memory capture via a native
+// Media Foundation plugin — see SECURITY.md.
 
 import 'dart:io';
 

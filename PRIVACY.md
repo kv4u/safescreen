@@ -22,15 +22,16 @@ view — and is then discarded. No frame is retained in memory beyond the
 detection call. No images, embeddings, face templates, or biometric identifiers
 are stored anywhere.
 
-**However:** on Windows, frames pass through your Pictures folder on the way in,
-because of a limitation in the underlying camera plugin. SafeScreen destroys
-each file immediately and overwrites it first, but it cannot prevent the write.
-If your Pictures folder syncs to OneDrive, there is a window in which a frame
-could be uploaded.
+**One caveat:** on Windows, each frame briefly touches the disk. The underlying
+camera plugin has no streaming API, so it writes a JPEG and returns a path —
+there is no way to intercept that from Dart. SafeScreen ships a forked plugin
+that redirects those writes to a private `%TEMP%\SafeScreenFrames` directory
+rather than your Pictures library (which is usually OneDrive-synced), and
+overwrites and deletes each file the moment it has been read.
 
-This is described in full, without softening, in
-[SECURITY.md](SECURITY.md#known-issue-captured-frames-are-written-to-your-pictures-folder).
-Read it before deciding whether to run this.
+So frames stay on your machine and do not survive their read — but they are
+written, briefly, before being erased. The full detail, including what that does
+not cover, is in [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
 
 ## What is stored
 

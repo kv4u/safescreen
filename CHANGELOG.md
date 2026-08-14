@@ -52,10 +52,19 @@ First public release. Windows is the supported platform.
 
 ### Fixed
 
-- **Captured frames are now erased.** Each JPEG the camera plugin writes is
-  overwritten with zeros and deleted immediately, on every path including
-  errors, with a sweep on shutdown for anything that survived a crash. See
-  [SECURITY.md](SECURITY.md) for what this does and does not solve.
+- **Captured frames no longer land in the user's Pictures folder.** The
+  upstream `camera_windows` plugin writes every `takePicture()` frame to
+  `FOLDERID_Pictures`, which is Search-indexed, thumbnailed, and typically
+  OneDrive-synced — so a gaze detector sampling several times a second would
+  upload thousands of photographs of the user. SafeScreen now vendors a forked
+  plugin whose sole change is to redirect captures to a private
+  `%TEMP%\SafeScreenFrames` directory. See
+  [`packages/camera_windows/FORK_NOTICE.md`](packages/camera_windows/FORK_NOTICE.md).
+- **Captured frames are now erased.** Each JPEG is overwritten with zeros and
+  deleted immediately, on every path including errors, with a sweep on shutdown
+  for anything that survived a crash. See
+  [SECURITY.md](SECURITY.md#how-camera-frames-are-handled) for what this does
+  and does not solve.
 - **Window transitions no longer race.** Overlapping async `window_manager`
   calls could interleave and leave the window state disagreeing with the
   detector state. Transitions are now serialised.
@@ -66,9 +75,10 @@ First public release. Windows is the supported platform.
 
 ### Known issues
 
-- Captured frames are written to the user's Pictures folder by the underlying
-  camera plugin before SafeScreen can erase them. See
-  [SECURITY.md](SECURITY.md).
+- Camera frames still touch the disk briefly, in private temp storage, before
+  being erased. Eliminating disk writes entirely requires a native Media
+  Foundation capture path. See
+  [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
 - Only the primary monitor is covered by the blackout.
 - Android support is experimental and unsupported.
 

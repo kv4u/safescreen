@@ -182,16 +182,19 @@
 
 <div class="wrap">
   <div class="notice">
-    <h3>⚠️ Read this before installing</h3>
+    <h3>How camera frames are handled</h3>
     <p>
-      Because of a limitation in the Windows camera plugin SafeScreen depends on,
-      captured frames pass briefly through your <strong>Pictures folder</strong> —
-      which on most machines syncs to OneDrive. SafeScreen overwrites and deletes
-      each one immediately, but it cannot prevent the write.
+      The Windows camera plugin has no streaming API, so each frame is written to
+      disk before SafeScreen can see it — and by default that means your
+      <strong>Pictures folder</strong>, which usually syncs to OneDrive.
+      SafeScreen ships a forked plugin that redirects those writes into private
+      temp storage, then overwrites and deletes each file the instant it is read.
     </p>
     <p>
-      If that matters to your threat model, wait for in-memory capture.
-      <a href="https://github.com/kv4u/safescreen/blob/main/SECURITY.md#known-issue-captured-frames-are-written-to-your-pictures-folder">Full detail in SECURITY.md →</a>
+      Frames stay on your machine and do not outlive their read — but they are
+      written briefly, and that is worth knowing before you install a tool that
+      watches you.
+      <a href="https://github.com/kv4u/safescreen/blob/main/SECURITY.md#how-camera-frames-are-handled">The complete account is in SECURITY.md →</a>
     </p>
   </div>
 </div>
@@ -337,7 +340,7 @@
     <li><strong>Not a lock screen.</strong> It does not authenticate anyone and will not stop someone using your keyboard. Use <code>Win</code>+<code>L</code> for that.</li>
     <li><strong>Only the primary monitor is covered.</strong> Other displays stay visible when you look away. It's the number two item on the roadmap.</li>
     <li><strong>It does not know who you are.</strong> It knows a face is present and roughly where it's pointed. Shoulder-surfer detection triggers on any second face — including one on a poster.</li>
-    <li><strong>Frames touch disk.</strong> See the notice at the top of this page.</li>
+    <li><strong>Frames touch disk briefly.</strong> In private temp storage, erased immediately — but written. See the notice at the top of this page.</li>
   </ul>
 </section>
 
