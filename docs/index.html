@@ -40,6 +40,20 @@
           "Roboto Mono", Menlo, Consolas, monospace;
   --sans: "Helvetica Neue", Inter, -apple-system, BlinkMacSystemFont,
           "Segoe UI", system-ui, Arial, sans-serif;
+
+  /* One spacing scale. Everything vertical picks from these rather than
+     inventing a number, which is how the page ended up with 22/24/26/30/34/38
+     all meaning roughly "a gap". */
+  --s2: 8px;
+  --s3: 16px;
+  --s4: 24px;
+  --s5: 32px;
+  --s6: 48px;
+  --s7: 64px;
+
+  /* Shared row rhythm for every marker + label + prose list. */
+  --row-marker: 28px;
+  --row-label: 240px;
 }
 
 * { box-sizing: border-box; }
@@ -68,7 +82,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
 .hr-heavy { border-top: 2px solid var(--ink); }
 
 /* ── Masthead ────────────────────────────────────────────────────────── */
-.masthead { padding-top: 18px; }
+.masthead { padding-top: var(--s3); }
 .topline {
   display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
   font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
@@ -85,18 +99,18 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
   font-size: clamp(2.3rem, 6.6vw, 4.7rem);
   line-height: .94;
   letter-spacing: -.045em;
-  margin: 28px 0 0;
+  margin: var(--s4) 0 0;
   max-width: 17ch;
 }
 .title em { font-style: normal; color: var(--mute); }
 
 /* Kept tight on purpose: every pixel here pushes the demo below the fold, and
    the demo is the argument. */
-.deck { margin: 20px 0 0; max-width: 62ch; font-size: 15px; color: var(--ink2); }
+.deck { margin: var(--s3) 0 0; max-width: 62ch; font-size: 15px; color: var(--ink2); }
 
 /* Spec sheet — the datasheet device that sets the whole tone. */
 .specs {
-  margin: 40px 0 0;
+  margin: var(--s5) 0 0;
   border-top: 1px solid var(--rule);
   font-size: 12.5px;
 }
@@ -112,7 +126,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
 .specs dd b { font-weight: 700; }
 @media (max-width: 560px) { .specs dl { grid-template-columns: 106px 1fr; } }
 
-.actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 32px 0 0; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s5) 0 0; }
 .btn {
   font-family: var(--mono); font-size: 13px; letter-spacing: .04em;
   text-transform: uppercase; text-decoration: none;
@@ -124,13 +138,15 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
 .btn-solid { background: var(--ink); color: var(--paper); }
 .btn-solid:hover { background: var(--signal); border-color: var(--signal); color: #fff; }
 
+.demo-sec { padding-top: var(--s6); }
+
 /* ── Section scaffolding ─────────────────────────────────────────────── */
-section { padding: 62px 0; }
+section { padding: var(--s7) 0; }
 /* Section marker: a large marginal figure over a small label. Replaces a "§",
    which signalled "technical document" only to readers who already knew the
    glyph and read as noise to everyone else. This also gives the narrow rail
    something to hold — it was nearly empty before. */
-.sec-num { margin: 0 0 14px; display: flex; align-items: baseline; gap: 12px; }
+.sec-num { margin: 0 0 var(--s3); display: flex; align-items: baseline; gap: 12px; }
 .sec-num .fig {
   font-family: var(--sans); font-weight: 800;
   font-size: 2rem; line-height: .9; letter-spacing: -.05em;
@@ -141,6 +157,8 @@ section { padding: 62px 0; }
   color: var(--mute);
 }
 @media (min-width: 900px) {
+  /* 6px is an optical nudge, not a scale value: it sits the numeral's
+     cap-height against the rule, which metric spacing alone does not do. */
   .sec-num { display: block; padding-top: 6px; border-top: 2px solid var(--ink); }
   .sec-num .fig { display: block; font-size: 3.1rem; margin-bottom: 4px; }
 }
@@ -149,11 +167,43 @@ section { padding: 62px 0; }
   font-size: clamp(1.5rem, 3.6vw, 2.3rem); letter-spacing: -.035em;
   line-height: 1.04; margin: 0; max-width: 22ch;
 }
-.sec-intro { margin: 16px 0 0; max-width: 66ch; color: var(--ink2); }
+.sec-intro { margin: var(--s3) 0 0; max-width: 66ch; color: var(--ink2); }
 
 /* Two-column: narrow label rail + content. Asymmetry on purpose. */
-.cols { display: grid; gap: 30px; }
-@media (min-width: 900px) { .cols { grid-template-columns: 240px 1fr; gap: 48px; } }
+.cols { display: grid; gap: var(--s5); padding-top: var(--s5); }
+@media (min-width: 900px) {
+  .cols { grid-template-columns: var(--row-label) 1fr; gap: var(--s6); }
+}
+
+/* ── Shared list rhythm ──────────────────────────────────────────────────
+   Situations, capabilities and limitations are all "marker · label · prose"
+   rows stacked down the same column. They previously used 26/200, 42/260 and
+   28/240, so their labels started at three different x positions and the eye
+   caught the jitter on every scroll. One rhythm for all three. */
+.cases, .nots { list-style: none; padding: 0; }
+.cases, .nots, .blocks {
+  margin: var(--s5) 0 0;
+  border-top: 1px solid var(--rule);
+}
+.cases li, .nots li, .block {
+  display: grid;
+  gap: 4px var(--s3);
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--rule2);
+}
+@media (min-width: 760px) {
+  .cases li, .nots li, .block {
+    grid-template-columns: var(--row-marker) var(--row-label) 1fr;
+    align-items: baseline;
+  }
+}
+/* Marker, label and prose share one treatment across all three lists. */
+.cases .a, .nots .x, .block .n { color: var(--signal); }
+.cases b, .nots b, .block h3 {
+  font-family: var(--sans); font-weight: 800;
+  letter-spacing: -.015em; font-size: .98rem; margin: 0;
+}
+.cases span.t, .nots span.t, .block p { color: var(--ink2); margin: 0; }
 
 /* Grid and flex items default to a min-width of `auto`, which lets any
    non-wrapping child (the ASCII diagram, the formulas, a long command) widen
@@ -220,30 +270,17 @@ section { padding: 62px 0; }
   background: var(--card); color: var(--ink2);
 }
 .trig:hover { background: var(--ink); color: var(--paper); }
-.caption { margin: 14px 0 0; font-size: 12.5px; color: var(--mute); max-width: 70ch; }
+.caption { margin: var(--s3) 0 0; font-size: 12.5px; color: var(--mute); max-width: 70ch; }
 .caption b { color: var(--ink); font-weight: 700; }
 
 /* ── Numbered list blocks ────────────────────────────────────────────── */
-.blocks { border-top: 1px solid var(--rule); }
-.block { display: grid; gap: 6px 26px; padding: 22px 0; border-bottom: 1px solid var(--rule2); }
-@media (min-width: 760px) { .block { grid-template-columns: 42px 260px 1fr; align-items: start; } }
-.block .n { color: var(--signal); font-size: 12px; letter-spacing: .1em; }
-.block h3 { font-family: var(--sans); font-size: 1.02rem; font-weight: 800; letter-spacing: -.02em; margin: 0; }
-.block p { margin: 0; color: var(--ink2); }
+.block .n { font-size: 12px; letter-spacing: .1em; }
 .block .eq {
-  display: inline-block; margin-top: 10px; padding: 6px 10px;
+  display: inline-block; margin-top: var(--s3); padding: 6px 10px;
   background: var(--card); border: 1px solid var(--rule2);
   color: var(--signal); font-size: 12.5px; white-space: nowrap;
   max-width: 100%; overflow-x: auto;
 }
-
-/* ── Situations ──────────────────────────────────────────────────────── */
-.cases { list-style: none; margin: 26px 0 0; padding: 0; border-top: 1px solid var(--rule); }
-.cases li { display: grid; gap: 2px 18px; padding: 13px 0; border-bottom: 1px solid var(--rule2); }
-@media (min-width: 640px) { .cases li { grid-template-columns: 26px 200px 1fr; align-items: baseline; } }
-.cases .a { color: var(--signal); }
-.cases b { font-family: var(--sans); font-weight: 800; letter-spacing: -.015em; font-size: .96rem; }
-.cases span.t { color: var(--ink2); }
 
 /* ── ASCII pipeline ──────────────────────────────────────────────────── */
 .ascii {
@@ -255,7 +292,10 @@ section { padding: 62px 0; }
 .ascii .hi { color: var(--signal); }
 
 /* ── Notice ──────────────────────────────────────────────────────────── */
-.notice { border: 2px solid var(--ink); background: var(--card); padding: 26px; }
+.notice {
+  border: 2px solid var(--ink); background: var(--card);
+  padding: var(--s5); margin-top: var(--s5);
+}
 .notice h3 { font-family: var(--sans); font-size: 1.12rem; font-weight: 800; letter-spacing: -.02em; margin: 0 0 12px; }
 .notice p { color: var(--ink2); margin: 0 0 12px; }
 .notice p:last-child { margin-bottom: 0; }
@@ -264,16 +304,10 @@ section { padding: 62px 0; }
   border: 1px solid var(--rule); padding: 1px 5px; font-size: .92em; color: var(--signal);
 }
 
-/* ── Not-this list ───────────────────────────────────────────────────── */
-.nots { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
-.nots li { display: grid; gap: 4px 18px; padding: 18px 0; border-bottom: 1px solid var(--rule2); }
-@media (min-width: 760px) { .nots li { grid-template-columns: 28px 240px 1fr; align-items: start; } }
-.nots .x { color: var(--signal); }
-.nots b { font-family: var(--sans); font-weight: 800; letter-spacing: -.015em; font-size: .98rem; }
-.nots span.t { color: var(--ink2); }
-
+/* Commands in the verify section. */
+.cmds { margin-top: var(--s5); }
 pre.cmd {
-  margin: 0 0 10px; padding: 13px 15px; background: var(--black); color: #d8d5cf;
+  margin: 0 0 var(--s2); padding: 13px 15px; background: var(--black); color: #d8d5cf;
   overflow-x: auto; font-size: 12.5px; line-height: 1.55;
 }
 pre.cmd .p { color: #6d6a64; user-select: none; }
@@ -320,7 +354,7 @@ footer .spacer { margin-left: auto; }
 </div>
 
 <!-- ── Live demo ───────────────────────────────────────────────────────── -->
-<section class="wrap" style="padding-top:56px">
+<section class="wrap demo-sec">
   <div class="screen" id="screen" data-state="protected">
     <div class="screen-bar">
       <span>.env — production</span>
@@ -385,7 +419,7 @@ footer .spacer { margin-left: auto; }
 <!-- ── 01 In practice ──────────────────────────────────────────────────── -->
 <section class="wrap" id="what">
   <hr>
-  <div class="cols" style="padding-top:34px">
+  <div class="cols">
     <div>
       <p class="sec-num"><span class="fig">01</span><span class="lbl">In practice</span></p>
     </div>
@@ -420,7 +454,7 @@ footer .spacer { margin-left: auto; }
         </li>
       </ul>
 
-      <div class="blocks" style="margin-top:38px">
+      <div class="blocks">
         <div class="block">
           <span class="n">→</span>
           <h3>A second face is one too many</h3>
@@ -483,7 +517,7 @@ footer .spacer { margin-left: auto; }
 <!-- ── 02 Detection ────────────────────────────────────────────────────── -->
 <section class="wrap" id="how">
   <hr>
-  <div class="cols" style="padding-top:34px">
+  <div class="cols">
     <div>
       <p class="sec-num"><span class="fig">02</span><span class="lbl">Detection</span></p>
     </div>
@@ -506,7 +540,7 @@ footer .spacer { margin-left: auto; }
                                               <b>hysteresis</b> ──▶ <b>■ / □</b>
 </pre>
 
-      <div class="blocks" style="margin-top:30px">
+      <div class="blocks">
         <div class="block">
           <span class="n">01</span>
           <h3>Yaw, from a cylinder</h3>
@@ -551,7 +585,7 @@ footer .spacer { margin-left: auto; }
 <!-- ── 03 Frames ───────────────────────────────────────────────────────── -->
 <section class="wrap" id="frames">
   <hr>
-  <div class="cols" style="padding-top:34px">
+  <div class="cols">
     <div><p class="sec-num"><span class="fig">03</span><span class="lbl">Frames</span></p></div>
     <div>
       <h2 class="sec-title">Where your camera frames actually go.</h2>
@@ -559,7 +593,7 @@ footer .spacer { margin-left: auto; }
         The part most tools would leave out of the marketing.
       </p>
 
-      <div class="notice" style="margin-top:26px">
+      <div class="notice">
         <h3>They touch the disk. Briefly. Here is exactly how.</h3>
         <p>
           The Windows camera plugin has no streaming API — the only way to get a
@@ -590,13 +624,13 @@ footer .spacer { margin-left: auto; }
 <!-- ── 04 Scope ────────────────────────────────────────────────────────── -->
 <section class="wrap" id="scope">
   <hr>
-  <div class="cols" style="padding-top:34px">
+  <div class="cols">
     <div><p class="sec-num"><span class="fig">04</span><span class="lbl">Scope</span></p></div>
     <div>
       <h2 class="sec-title">What it is not.</h2>
       <p class="sec-intro">A privacy tool that overstates itself is worse than none at all.</p>
 
-      <ul class="nots" style="margin-top:24px">
+      <ul class="nots">
         <li>
           <span class="x">✗</span>
           <b>Not a lock screen</b>
@@ -625,7 +659,7 @@ footer .spacer { margin-left: auto; }
 <!-- ── 05 Verify ───────────────────────────────────────────────────────── -->
 <section class="wrap">
   <hr>
-  <div class="cols" style="padding-top:34px">
+  <div class="cols">
     <div><p class="sec-num"><span class="fig">05</span><span class="lbl">Verify</span></p></div>
     <div>
       <h2 class="sec-title">Check what you downloaded.</h2>
@@ -634,7 +668,7 @@ footer .spacer { margin-left: auto; }
         uploaded from a developer's machine — and carries a provenance
         attestation you can check against this repository.
       </p>
-      <div style="margin-top:22px">
+      <div class="cmds">
         <pre class="cmd"><span class="p">PS&gt; </span>Get-FileHash .\SafeScreen-windows-x64.zip -Algorithm SHA256</pre>
         <pre class="cmd"><span class="p">$ </span>gh attestation verify SafeScreen-windows-x64.zip --repo kv4u/safescreen</pre>
       </div>
