@@ -18,7 +18,7 @@ permissions:
 jobs:
   analyze-and-test:
     name: Analyze & test
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +44,7 @@ jobs:
 
   build:
     name: Build Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: analyze-and-test
     steps:
       - uses: actions/checkout@v4
@@ -57,6 +57,13 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      # Flutter picks the CMake generator from whatever Visual Studio it
+      # detects, and silently falls back to "Visual Studio 16 2019" when it
+      # finds none — which fails with a confusing "could not find any instance
+      # of Visual Studio". Printing doctor output makes that diagnosable.
+      - name: Flutter doctor
+        run: flutter doctor -v
 
       - name: Build release
         run: flutter build windows --release
