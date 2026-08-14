@@ -76,6 +76,12 @@ class CameraGazeService {
   /// The mode the camera actually accepted, once running.
   ResolutionPreset? get activeResolution => _activeResolution;
 
+  HeadPose? _lastPose;
+
+  /// The most recent usable head-pose reading, for the status readout. Null
+  /// when no face is in frame or the keypoints were unusable.
+  HeadPose? get lastPose => _lastPose;
+
   /// Sampling cadence. Faster while the screen is exposed, because that is when
   /// a missed look-away actually costs something; slower while already
   /// protected, which halves the number of frames written to disk when the user
@@ -240,6 +246,7 @@ class CameraGazeService {
 
   void _observeWindowsFaces(List<tflite.Face> faces) {
     if (faces.isEmpty) {
+      _lastPose = null;
       gazeDetector.observe(const GazeSample.noFace());
       return;
     }
@@ -260,9 +267,11 @@ class CameraGazeService {
 
     final HeadPose? pose = estimateHeadPose(keypoints);
     if (pose == null) {
+      _lastPose = null;
       gazeDetector.observeError();
       return;
     }
+    _lastPose = pose;
 
     final double deviation = _pitchBaseline.deviation(pose.pitchRatio);
     gazeDetector.observe(
@@ -403,6 +412,7 @@ class CameraGazeService {
     _faceDetector = null;
     _isProcessing = false;
     _activeResolution = null;
+    _lastPose = null;
 
     // Last line of defence: destroy any capture file that outlived its read.
     await _frameStore.sweep();

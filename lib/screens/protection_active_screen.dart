@@ -12,17 +12,9 @@ import 'package:window_manager/window_manager.dart';
 
 import '../services/camera_gaze_service.dart';
 import '../services/gaze_detector_service.dart';
+import '../services/head_pose_estimator.dart';
 import '../services/settings_service.dart';
-
-// Design tokens (duplicated for file independence)
-const _bg = Color(0xFF0D1117);
-const _surface = Color(0xFF161B22);
-const _border = Color(0xFF30363D);
-const _blue = Color(0xFF3B82F6);
-const _green = Color(0xFF10B981);
-const _amber = Color(0xFFF59E0B);
-const _textPrimary = Color(0xFFE6EDF3);
-const _textMuted = Color(0xFF8B949E);
+import '../theme/tokens.dart';
 
 class ProtectionActiveScreen extends StatefulWidget {
   const ProtectionActiveScreen({super.key});
@@ -120,7 +112,7 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
 
   Future<void> _initWindowsMode() async {
     await windowManager.setAlwaysOnTop(true);
-    await windowManager.setSize(const Size(440, 420));
+    await windowManager.setSize(W.panel);
     await windowManager.center();
   }
 
@@ -128,7 +120,7 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
     try {
       await windowManager.setFullScreen(false);
       await windowManager.setAlwaysOnTop(false);
-      await windowManager.setSize(const Size(480, 640));
+      await windowManager.setSize(W.panel);
       await windowManager.center();
     } catch (_) {}
   }
@@ -191,7 +183,7 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
         _overlayActive = false;
         await windowManager.setFullScreen(false);
         await windowManager.setAlwaysOnTop(true);
-        await windowManager.setSize(const Size(440, 420));
+        await windowManager.setSize(W.panel);
         await windowManager.center();
       }
     });
@@ -261,73 +253,50 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
     if (mounted) Navigator.of(context).pop();
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // -- Build ----------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final bool isVisible = _gazeDetector.isScreenVisible;
-    final bool showOverlay = !_isStarting && _error == null && !isVisible;
+    final bool showBlackout = _blackoutWanted;
 
     return Stack(
       fit: StackFit.expand,
       children: [
         Scaffold(
-          backgroundColor: _bg,
-          appBar: Platform.isWindows ? _buildWindowsAppBar() : null,
-          body: SafeArea(child: _buildBody(isVisible)),
-        ),
-        if (showOverlay && Platform.isWindows) _buildWindowsOverlay(),
-      ],
-    );
-  }
-
-  PreferredSizeWidget _buildWindowsAppBar() {
-    return AppBar(
-      backgroundColor: _surface,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, size: 18, color: _textMuted),
-        tooltip: 'Stop protection',
-        onPressed: _stopProtection,
-      ),
-      title: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color:
-                  _isStarting ? _amber : (_error != null ? Colors.red : _green),
-              shape: BoxShape.circle,
-            ),
+          backgroundColor: C.paper,
+          body: Column(
+            children: [
+              if (Platform.isWindows)
+                TitleStrip(
+                  title:
+                      _isStarting
+                          ? 'Starting'
+                          : (_error != null
+                              ? 'Camera error'
+                              : 'Protection active'),
+                  statusColor:
+                      _isStarting
+                          ? C.inkMuted
+                          : (_error != null
+                              ? C.signal
+                              : (isVisible ? C.clear : C.signal)),
+                  onBack: _stopProtection,
+                  onMinimise: () => windowManager.hide(),
+                  onClose: () => windowManager.close(),
+                ),
+              Expanded(
+                child: SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(S.x5),
+                    child: _buildBody(isVisible),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(
-            _isStarting
-                ? 'Starting…'
-                : (_error != null ? 'Error' : 'Protection active'),
-            style: const TextStyle(
-              color: _textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.minimize_rounded, size: 18),
-          tooltip: 'Minimise to tray',
-          onPressed: () => windowManager.hide(),
-          color: _textMuted,
         ),
-        IconButton(
-          icon: const Icon(Icons.close_rounded, size: 18),
-          tooltip: 'Close',
-          onPressed: () => windowManager.close(),
-          color: _textMuted,
-        ),
-        const SizedBox(width: 4),
+        if (showBlackout && Platform.isWindows) _buildBlackout(),
       ],
     );
   }
@@ -339,350 +308,208 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
   }
 
   Widget _buildStarting() {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircularProgressIndicator(color: _blue, strokeWidth: 2.5),
-          SizedBox(height: 20),
-          Text(
-            'Starting camera…',
-            style: TextStyle(color: _textMuted, fontSize: 14),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('STATUS', style: T.label),
+        const SizedBox(height: S.x2),
+        const Text('Opening\ncamera', style: T.state),
+        const SizedBox(height: S.x5),
+        const SizedBox(
+          width: 120,
+          child: LinearProgressIndicator(
+            minHeight: 3,
+            color: C.ink,
+            backgroundColor: C.ruleFaint,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildErrorState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.error_outline_rounded,
-                size: 32,
-                color: Colors.redAccent,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Camera error',
-              style: TextStyle(
-                color: _textPrimary,
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: _textMuted,
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _startCamera,
-              style: FilledButton.styleFrom(backgroundColor: _blue),
-              child: const Text('Retry'),
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: _stopProtection,
-              child: const Text(
-                'Stop Protection',
-                style: TextStyle(color: _textMuted),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('STATUS', style: T.label.copyWith(color: C.signal)),
+        const SizedBox(height: S.x2),
+        Text('Camera\nerror', style: T.state.copyWith(color: C.signal)),
+        const SizedBox(height: S.x5),
+        const Rule(),
+        const SizedBox(height: S.x4),
+        Text(_error!, style: T.body),
+        const SizedBox(height: S.x6),
+        PanelButton(label: 'Retry', primary: true, onPressed: _startCamera),
+        const SizedBox(height: S.x2),
+        PanelButton(label: 'Stop protection', onPressed: _stopProtection),
+      ],
     );
   }
+
+  // -- The console ----------------------------------------------------------
 
   Widget _buildStatus(bool isVisible) {
     final CameraController? controller = _cameraGazeService.controller;
     final bool hasPreview =
         controller != null && controller.value.isInitialized;
-    final ProtectionReason reason = _gazeDetector.reason;
+    final Color tone = isVisible ? C.clear : C.signal;
+    final HeadPose? pose = _cameraGazeService.lastPose;
+    final int failures = _cameraGazeService.shredFailures;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          if (hasPreview) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                height: 140,
-                child: AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: CameraPreview(controller),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          Container(
-            decoration: BoxDecoration(
-              color: _surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color:
-                    isVisible
-                        ? _green.withValues(alpha: 0.3)
-                        : _amber.withValues(alpha: 0.3),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: isVisible ? _green : _amber,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: (isVisible ? _green : _amber).withValues(
-                              alpha: 0.5,
-                            ),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isVisible ? 'Screen visible' : 'Screen protected',
-                            style: TextStyle(
-                              color: isVisible ? _green : _amber,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            reason.message,
-                            style: const TextStyle(
-                              color: _textMuted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Gaze confidence',
-                          style: TextStyle(color: _textMuted, fontSize: 11),
-                        ),
-                        Text(
-                          '${(_gazeDetector.confidence * 100).round()}%',
-                          style: const TextStyle(
-                            color: _textMuted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: _gazeDetector.confidence,
-                        backgroundColor: _border,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          isVisible ? _green : _amber,
-                        ),
-                        minHeight: 5,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('SCREEN', style: T.label),
+        const SizedBox(height: S.x2),
+        Text(
+          isVisible ? 'Visible' : 'Protected',
+          style: T.state.copyWith(color: tone),
+        ),
+        const SizedBox(height: S.x1),
+        Text(_gazeDetector.reason.message, style: T.body),
+
+        const SizedBox(height: S.x4),
+        SegmentMeter(
+          filled:
+              isVisible
+                  ? _gazeDetector.framesToReveal
+                  : (_gazeDetector.confidence * _gazeDetector.framesToReveal)
+                      .round(),
+          total: _gazeDetector.framesToReveal,
+          color: tone,
+        ),
+
+        if (hasPreview) ...[
+          const SizedBox(height: S.x5),
+          // Constrained rather than fixed: the preview keeps the camera's own
+          // aspect ratio and simply gets smaller in a narrow window, instead of
+          // forcing a 4:3 box wider than the panel.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 150),
+            child: AspectRatio(
+              aspectRatio:
+                  controller.value.aspectRatio == 0
+                      ? 4 / 3
+                      : controller.value.aspectRatio,
+              child: CameraPreview(controller),
             ),
           ),
-          const SizedBox(height: 12),
-          if (Platform.isWindows) _buildFrameHygieneCard(),
-          const SizedBox(height: 12),
-          Text(
-            Platform.isAndroid
-                ? 'Minimise this app — the overlay will cover other apps when you look away.'
-                : 'Use the minimise button to hide to tray. The blackout appears automatically.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _textMuted,
-              fontSize: 12,
-              height: 1.5,
-            ),
+        ],
+
+        const SizedBox(height: S.x6),
+        const Rule(),
+        SpecRow(
+          label: 'Yaw',
+          value: pose == null ? '--' : '${pose.yaw.toStringAsFixed(1)} deg',
+        ),
+        const Rule(faint: true),
+        SpecRow(
+          label: 'Roll',
+          value: pose == null ? '--' : '${pose.roll.toStringAsFixed(1)} deg',
+        ),
+        const Rule(faint: true),
+        SpecRow(
+          label: 'Calibration',
+          value: _cameraGazeService.isPitchCalibrated ? 'Learned' : 'Learning',
+        ),
+        const Rule(faint: true),
+        SpecRow(label: 'Capture', value: _captureModeLabel),
+        const Rule(faint: true),
+        SpecRow(
+          label: 'Frames wiped',
+          value:
+              failures == 0
+                  ? '${_cameraGazeService.framesShredded}'
+                  : '${_cameraGazeService.framesShredded}  ($failures failed)',
+          valueColor: failures == 0 ? C.ink : C.signal,
+          emphasis: failures != 0,
+        ),
+        const Rule(),
+
+        const SizedBox(height: S.x6),
+        if (Platform.isWindows) ...[
+          PanelButton(
+            label: 'Minimise to tray',
+            icon: Icons.remove,
+            onPressed: () => windowManager.hide(),
           ),
-          const SizedBox(height: 16),
-          if (Platform.isWindows) ...[
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => windowManager.hide(),
-                icon: const Icon(Icons.minimize_rounded, size: 16),
-                label: const Text('Minimise to Tray'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _textPrimary,
-                  side: const BorderSide(color: _border),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: S.x2),
+        ],
+        PanelButton(
+          label: 'Stop protection',
+          danger: true,
+          icon: Icons.stop_outlined,
+          onPressed: _stopProtection,
+        ),
+      ],
+    );
+  }
+
+  String get _captureModeLabel {
+    final ResolutionPreset? p = _cameraGazeService.activeResolution;
+    return switch (p) {
+      ResolutionPreset.low => '240p',
+      ResolutionPreset.medium => '480p',
+      ResolutionPreset.high => '720p',
+      ResolutionPreset.veryHigh => '1080p',
+      ResolutionPreset.ultraHigh => '2160p',
+      ResolutionPreset.max => 'max',
+      null => '--',
+    };
+  }
+
+  // -- Blackout -------------------------------------------------------------
+
+  Widget _buildBlackout() {
+    return ColoredBox(
+      color: C.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(S.x6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: C.paper.withValues(alpha: 0.8),
+                    width: 2,
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _stopProtection,
-              icon: const Icon(Icons.stop_circle_outlined, size: 16),
-              label: const Text('Stop Protection'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.redAccent,
-                side: const BorderSide(color: Colors.red, width: 0.5),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                child: Icon(
+                  Icons.lock_outline,
+                  size: 22,
+                  color: C.paper.withValues(alpha: 0.8),
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Surfaces the capture-file accounting, so the disk behaviour described in
-  /// SECURITY.md is observable rather than something the user has to trust.
-  Widget _buildFrameHygieneCard() {
-    final int shredded = _cameraGazeService.framesShredded;
-    final int failures = _cameraGazeService.shredFailures;
-    final bool healthy = failures == 0;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: healthy ? _border : Colors.redAccent.withValues(alpha: 0.5),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(
-            healthy ? Icons.delete_sweep_rounded : Icons.warning_amber_rounded,
-            size: 16,
-            color: healthy ? _textMuted : Colors.redAccent,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              healthy
-                  ? '$shredded capture files erased'
-                  : '$shredded erased · $failures could not be deleted',
-              style: TextStyle(
-                color: healthy ? _textMuted : Colors.redAccent,
-                fontSize: 11,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Windows fullscreen blackout ───────────────────────────────────────────
-
-  Widget _buildWindowsOverlay() {
-    return Container(
-      color: Colors.black,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  width: 1.5,
+              const SizedBox(height: S.x5),
+              Text(
+                'SCREEN PROTECTED',
+                textAlign: TextAlign.center,
+                style: T.state.copyWith(
+                  color: C.paper,
+                  fontSize: 34,
+                  letterSpacing: -0.6,
                 ),
               ),
-              child: Icon(
-                Icons.lock_rounded,
-                size: 48,
-                color: Colors.white.withValues(alpha: 0.8),
+              const SizedBox(height: S.x3),
+              Text(
+                _gazeDetector.reason.message.toUpperCase(),
+                textAlign: TextAlign.center,
+                style: T.label.copyWith(color: C.signal, fontSize: 12),
               ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'Screen Protected',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.9),
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _gazeDetector.reason.message,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.45),
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 48),
-            TextButton(
-              onPressed: _stopProtection,
-              child: Text(
-                'Stop Protection',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  fontSize: 13,
+              const SizedBox(height: S.x7),
+              SizedBox(
+                width: 220,
+                child: PanelButton(
+                  label: 'Stop protection',
+                  onPressed: _stopProtection,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

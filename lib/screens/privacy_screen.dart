@@ -10,15 +10,19 @@ import 'package:window_manager/window_manager.dart';
 import '../services/camera_gaze_service.dart';
 import '../services/gaze_detector_service.dart';
 import '../services/settings_service.dart';
+import '../theme/tokens.dart';
 
-const _bg = Color(0xFF0D1117);
-const _surface = Color(0xFF161B22);
-const _border = Color(0xFF30363D);
-const _blue = Color(0xFF3B82F6);
-const _green = Color(0xFF10B981);
-const _amber = Color(0xFFF59E0B);
-const _textPrimary = Color(0xFFE6EDF3);
-const _textMuted = Color(0xFF8B949E);
+// Mapped onto the shared palette rather than redeclared. This screen keeps its
+// own layout, but its colours must come from one place — three files each
+// holding their own copy is how the palette drifted apart before.
+const _bg = C.paper;
+const _surface = C.paperRaised;
+const _border = C.rule;
+const _blue = C.ink;
+const _green = C.clear;
+const _amber = C.signal;
+const _textPrimary = C.ink;
+const _textMuted = C.inkMuted;
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});
