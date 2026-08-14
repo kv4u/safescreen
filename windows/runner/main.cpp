@@ -26,7 +26,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 720);
+  // Matches W.panel in lib/theme/tokens.dart. The Flutter template's default
+  // is 1280x720, which for a compact tray panel means the window is created at
+  // desktop size and only resized once Dart runs -- a visible flash of a large,
+  // mostly empty window on every launch. Creating it at the right size removes
+  // the flash; window_manager still centres and shows it before the first
+  // frame paints.
+  Win32Window::Size size(400, 620);
   if (!window.Create(L"safe_screen", origin, size)) {
     return EXIT_FAILURE;
   }

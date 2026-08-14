@@ -10,6 +10,7 @@ import 'package:path/path.dart' as path;
 import 'screens/privacy_screen.dart';
 import 'screens/protection_active_screen.dart';
 import 'services/settings_service.dart';
+import 'theme/tokens.dart';
 import 'overlay/overlay_screen.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
@@ -20,11 +21,33 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SettingsService.instance.load();
+
   if (Platform.isWindows) {
     await windowManager.ensureInitialized();
     windowManager.addListener(_WindowsTrayListener());
+
+    // The runner creates the window at 1280x720 and shows it immediately, so
+    // without this the app flashes up as a large, mostly empty window and then
+    // snaps down to panel size. waitUntilReadyToShow sizes it before the first
+    // paint; the minimum size stops a drag from breaking the layout.
+    await windowManager.waitUntilReadyToShow(
+      const WindowOptions(
+        size: W.panel,
+        minimumSize: W.minimum,
+        center: true,
+        backgroundColor: C.paper,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      ),
+      () async {
+        await windowManager.show();
+        await windowManager.focus();
+      },
+    );
     await windowManager.setPreventClose(false);
   }
+
   runApp(const SafeScreenApp());
 }
 
@@ -55,15 +78,26 @@ class SafeScreenApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF3B82F6),
-          brightness: Brightness.dark,
-        ).copyWith(
-          surface: const Color(0xFF0D1117),
-          onSurface: const Color(0xFFE6EDF3),
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0D1117),
+          seedColor: C.signal,
+          brightness: Brightness.light,
+        ).copyWith(surface: C.paper, onSurface: C.ink),
+        scaffoldBackgroundColor: C.paper,
+        splashFactory: NoSplash.splashFactory,
         useMaterial3: true,
       ),
+      builder: (BuildContext context, Widget? child) {
+        // Windows text-scale settings can go high enough to burst a compact
+        // panel. Honour the user's preference, but cap it where the layout
+        // still holds together rather than overflowing.
+        final MediaQueryData mq = MediaQuery.of(context);
+        final double scale = mq.textScaler.scale(14) / 14;
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: TextScaler.linear(scale.clamp(1.0, 1.35)),
+          ),
+          child: child!,
+        );
+      },
       home: const SafeScreenHome(),
     );
   }
@@ -89,14 +123,11 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
   double _sensitivity = SettingsService.instance.sensitivity;
   bool _detectShoulderSurfers = SettingsService.instance.detectShoulderSurfers;
 
-  // Design tokens
-  static const _bg = Color(0xFF0D1117);
-  static const _surface = Color(0xFF161B22);
-  static const _border = Color(0xFF30363D);
-  static const _blue = Color(0xFF3B82F6);
-  static const _green = Color(0xFF10B981);
-  static const _textPrimary = Color(0xFFE6EDF3);
-  static const _textMuted = Color(0xFF8B949E);
+  /// Name of the camera that will be used, shown in the spec table so the user
+  /// can see which device this is about before granting it their face.
+  String? _cameraName;
+
+  String get _cameraLabel => _cameraName ?? 'Detected';
 
   @override
   void initState() {
@@ -201,7 +232,19 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
         }
         return;
       }
-      if (mounted) setState(() => _checking = false);
+      // Prefer the front camera, matching what CameraGazeService will pick.
+      final Iterable<CameraDescription> front = cameras.where(
+        (CameraDescription c) => c.lensDirection == CameraLensDirection.front,
+      );
+      final CameraDescription chosen =
+          front.isNotEmpty ? front.first : cameras.first;
+
+      if (mounted) {
+        setState(() {
+          _checking = false;
+          _cameraName = chosen.name.trim().isEmpty ? null : chosen.name.trim();
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -260,517 +303,250 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
 
   @override
   Widget build(BuildContext context) {
-    if (_checking) return _buildLoading();
-    if (_error != null) return _buildError();
-    return _buildHome();
+    return Scaffold(
+      backgroundColor: C.paper,
+      body: Column(
+        children: [
+          if (Platform.isWindows)
+            TitleStrip(
+              title: 'SafeScreen',
+              onMinimise: () => windowManager.hide(),
+              onClose: () => windowManager.close(),
+            ),
+          // Expanded + scroll view: the panel is laid out to fit its natural
+          // window size, and degrades to scrolling rather than overflowing
+          // when the window is dragged small or the text scale is large.
+          Expanded(
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(S.x5),
+                child: _buildBody(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildLoading() {
-    return const Scaffold(
-      backgroundColor: _bg,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(color: _blue),
-            SizedBox(height: 20),
-            Text('Checking camera…', style: TextStyle(color: _textMuted)),
-          ],
+  Widget _buildBody() {
+    if (_checking) return _buildChecking();
+    if (_error != null) return _buildError();
+    return _buildPanel();
+  }
+
+  // -- States ---------------------------------------------------------------
+
+  Widget _buildChecking() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('STATUS', style: T.label),
+        const SizedBox(height: S.x2),
+        const Text('Checking\ncamera', style: T.state),
+        const SizedBox(height: S.x5),
+        const SizedBox(
+          width: 120,
+          child: LinearProgressIndicator(
+            minHeight: 3,
+            color: C.ink,
+            backgroundColor: C.ruleFaint,
+          ),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildError() {
-    return Scaffold(
-      backgroundColor: _bg,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.videocam_off_rounded,
-                  size: 40,
-                  color: Colors.orange,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Camera unavailable',
-                style: TextStyle(
-                  color: _textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: _textMuted, height: 1.5),
-              ),
-              const SizedBox(height: 28),
-              FilledButton(
-                onPressed: _checkCamera,
-                style: FilledButton.styleFrom(backgroundColor: _blue),
-                child: const Text('Retry'),
-              ),
-              if (_canOpenSettings) ...[
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: () async {
-                    await openAppSettings();
-                    if (mounted) _checkCamera();
-                  },
-                  icon: const Icon(Icons.settings_rounded, size: 18),
-                  label: const Text('Open Settings'),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHome() {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: Platform.isWindows ? _buildWindowsAppBar() : null,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 20),
-              _buildCameraChip(),
-              const SizedBox(height: 24),
-              _buildModeCard(
-                icon: Icons.shield_rounded,
-                iconColor: _blue,
-                title: 'Full Protection',
-                subtitle:
-                    Platform.isAndroid
-                        ? 'Overlays every app when you look away'
-                        : 'Fullscreen overlay when you look away',
-                bullets:
-                    Platform.isAndroid
-                        ? ['Works over all apps', 'Hides automatically']
-                        : ['Always on top', 'Minimises to system tray'],
-                buttonLabel: 'Start Protection',
-                onPressed: _goToProtection,
-              ),
-              const SizedBox(height: 16),
-              _buildModeCard(
-                icon: Icons.blur_on_rounded,
-                iconColor: _green,
-                title: 'In-App Mode',
-                subtitle: 'Blurs only this window — no overlay needed',
-                bullets: ['No special permissions', 'Instant blur effect'],
-                buttonLabel: 'Start In-App',
-                onPressed: _goToPrivacyScreen,
-              ),
-              const SizedBox(height: 20),
-              _buildSettingsCard(),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildWindowsAppBar() {
-    return AppBar(
-      backgroundColor: _surface,
-      elevation: 0,
-      title: Row(
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: _blue.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Icon(Icons.shield_rounded, size: 14, color: _blue),
-          ),
-          const SizedBox(width: 10),
-          const Text(
-            'SafeScreen',
-            style: TextStyle(
-              color: _textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.minimize_rounded, size: 18),
-          tooltip: 'Minimise to tray',
-          onPressed: () => windowManager.hide(),
-          color: _textMuted,
-        ),
-        IconButton(
-          icon: const Icon(Icons.close_rounded, size: 18),
-          tooltip: 'Close',
-          onPressed: () => windowManager.close(),
-          color: _textMuted,
-        ),
-        const SizedBox(width: 4),
-      ],
-    );
-  }
-
-  Widget _buildHeader() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            color: _blue.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: _blue.withValues(alpha: 0.25),
-              width: 1.5,
-            ),
+        Text('STATUS', style: T.label.copyWith(color: C.signal)),
+        const SizedBox(height: S.x2),
+        Text('Camera\nunavailable', style: T.state.copyWith(color: C.signal)),
+        const SizedBox(height: S.x5),
+        const Rule(),
+        const SizedBox(height: S.x4),
+        Text(_error!, style: T.body),
+        const SizedBox(height: S.x6),
+        PanelButton(label: 'Retry', primary: true, onPressed: _checkCamera),
+        if (_canOpenSettings) ...[
+          const SizedBox(height: S.x2),
+          PanelButton(
+            label: 'Open system settings',
+            onPressed: () async {
+              await openAppSettings();
+              if (mounted) _checkCamera();
+            },
           ),
-          child: const Icon(Icons.shield_rounded, size: 36, color: _blue),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'SafeScreen',
-          style: TextStyle(
-            color: _textPrimary,
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Gaze-based privacy protection',
-          style: TextStyle(color: _textMuted, fontSize: 14),
-        ),
+        ],
       ],
     );
   }
 
-  Widget _buildCameraChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: _green.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _green.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: _green,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Deliberately "detected", not "ready": this check only enumerates
-          // devices. Whether the camera will actually open at a usable capture
-          // mode is not known until protection starts, and claiming readiness
-          // here made a later failure look like a bug rather than a limitation.
-          const Text(
-            'Camera detected',
-            style: TextStyle(
-              color: _green,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+  // -- The panel ------------------------------------------------------------
+
+  Widget _buildPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('SCREEN PRIVACY', style: T.label),
+        const SizedBox(height: S.x2),
+        const Text('Ready', style: T.state),
+        const SizedBox(height: S.x3),
+        Text(
+          'Your screen goes dark when you look away, or when a second '
+          'face appears behind you.',
+          style: T.body,
+        ),
+        const SizedBox(height: S.x6),
+        const Rule(),
+        SpecRow(label: 'Camera', value: _cameraLabel),
+        const Rule(faint: true),
+        SpecRow(label: 'Sensitivity', value: _sensitivityLabel(_sensitivity)),
+        const Rule(faint: true),
+        SpecRow(
+          label: 'Shoulder',
+          value: _detectShoulderSurfers ? 'Watching' : 'Ignored',
+          valueColor: _detectShoulderSurfers ? C.ink : C.inkMuted,
+        ),
+        const Rule(faint: true),
+        const SpecRow(label: 'Network', value: 'None', emphasis: true),
+        const Rule(),
+        const SizedBox(height: S.x6),
+        PanelButton(
+          label: Platform.isAndroid ? 'Start overlay' : 'Start protection',
+          primary: true,
+          icon: Icons.shield_outlined,
+          onPressed: _goToProtection,
+        ),
+        const SizedBox(height: S.x2),
+        PanelButton(
+          label: 'In-app mode only',
+          icon: Icons.blur_on,
+          onPressed: _goToPrivacyScreen,
+        ),
+        const SizedBox(height: S.x6),
+        _buildSettings(),
+      ],
     );
   }
 
-  Widget _buildModeCard({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required List<String> bullets,
-    required String buttonLabel,
-    required VoidCallback onPressed,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+  Widget _buildSettings() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _showSettings = !_showSettings),
+          hoverColor: C.paperSunken,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: S.x2),
+            child: Row(
+              children: [
+                Icon(
+                  _showSettings ? Icons.remove : Icons.add,
+                  size: 13,
+                  color: C.inkMuted,
+                ),
+                const SizedBox(width: S.x2),
+                Text('DETECTION SETTINGS', style: T.label),
+              ],
+            ),
+          ),
+        ),
+        if (_showSettings) ...[
+          const Rule(faint: true),
+          const SizedBox(height: S.x4),
           Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+              Expanded(
+                child: Text(
+                  _sensitivityLabel(_sensitivity).toUpperCase(),
+                  style: T.readout.copyWith(fontWeight: FontWeight.w700),
                 ),
-                child: Icon(icon, size: 20, color: iconColor),
               ),
-              const SizedBox(width: 14),
+              Text('${(_sensitivity * 100).round()}', style: T.label),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              activeTrackColor: C.ink,
+              inactiveTrackColor: C.ruleFaint,
+              thumbColor: C.signal,
+              overlayColor: C.signal.withValues(alpha: 0.10),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              tickMarkShape: SliderTickMarkShape.noTickMark,
+            ),
+            child: Slider(
+              value: _sensitivity,
+              divisions: 4,
+              onChanged: (double v) => setState(() => _sensitivity = v),
+              onChangeEnd: SettingsService.instance.setSensitivity,
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('LENIENT', style: T.label),
+              Text('STRICT', style: T.label),
+            ],
+          ),
+          const SizedBox(height: S.x3),
+          Text(_sensitivityDescription(_sensitivity), style: T.body),
+          const SizedBox(height: S.x5),
+          const Rule(faint: true),
+          const SizedBox(height: S.x3),
+          Row(
+            children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: _textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text('SHOULDER-SURFER', style: T.label),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
-                      style: const TextStyle(color: _textMuted, fontSize: 12),
+                      'Protect when a second face appears',
+                      style: T.body.copyWith(fontSize: 11),
                     ),
                   ],
                 ),
               ),
+              Switch(
+                value: _detectShoulderSurfers,
+                activeColor: C.signal,
+                inactiveThumbColor: C.inkMuted,
+                inactiveTrackColor: C.ruleFaint,
+                onChanged: (bool v) {
+                  setState(() => _detectShoulderSurfers = v);
+                  SettingsService.instance.setDetectShoulderSurfers(v);
+                },
+              ),
             ],
           ),
-          const SizedBox(height: 14),
-          ...bullets.map(
-            (b) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    size: 14,
-                    color: iconColor.withValues(alpha: 0.7),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    b,
-                    style: const TextStyle(color: _textMuted, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: onPressed,
-              style: FilledButton.styleFrom(
-                backgroundColor: iconColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: Text(
-                buttonLabel,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => setState(() => _showSettings = !_showSettings),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.tune_rounded, size: 18, color: _textMuted),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Detection settings',
-                    style: TextStyle(
-                      color: _textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    _showSettings
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    size: 20,
-                    color: _textMuted,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_showSettings) ...[
-            Divider(height: 1, color: _border),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Sensitivity',
-                        style: TextStyle(
-                          color: _textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Text(
-                        _sensitivityLabel(_sensitivity),
-                        style: const TextStyle(
-                          color: _blue,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      activeTrackColor: _blue,
-                      inactiveTrackColor: _border,
-                      thumbColor: _blue,
-                      overlayColor: _blue.withValues(alpha: 0.12),
-                      trackHeight: 3,
-                    ),
-                    child: Slider(
-                      value: _sensitivity,
-                      min: 0,
-                      max: 1,
-                      divisions: 4,
-                      onChanged: (v) => setState(() => _sensitivity = v),
-                      onChangeEnd:
-                          (v) => SettingsService.instance.setSensitivity(v),
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      Text(
-                        'Lenient',
-                        style: TextStyle(color: _textMuted, fontSize: 11),
-                      ),
-                      Text(
-                        'Strict',
-                        style: TextStyle(color: _textMuted, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _sensitivityDescription(_sensitivity),
-                    style: const TextStyle(
-                      color: _textMuted,
-                      fontSize: 12,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Divider(height: 1, color: _border),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Shoulder-surfer detection',
-                              style: TextStyle(
-                                color: _textPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Protect the screen when a second face appears',
-                              style: TextStyle(color: _textMuted, fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch(
-                        value: _detectShoulderSurfers,
-                        activeColor: _blue,
-                        onChanged: (v) {
-                          setState(() => _detectShoulderSurfers = v);
-                          SettingsService.instance.setDetectShoulderSurfers(v);
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
+      ],
     );
   }
 
   String _sensitivityLabel(double v) {
-    if (v <= 0.1) return 'Very Lenient';
+    if (v <= 0.1) return 'Very lenient';
     if (v <= 0.35) return 'Lenient';
     if (v <= 0.65) return 'Medium';
     if (v <= 0.85) return 'Strict';
-    return 'Very Strict';
+    return 'Very strict';
   }
 
   String _sensitivityDescription(double v) {
     if (v <= 0.35) {
-      return 'Large head movements allowed before screen is protected. Good for busy environments.';
+      return 'Tolerates large head movements before protecting. '
+          'Suits busy environments.';
     }
     if (v <= 0.65) {
-      return 'Balanced — protects screen when you look away but tolerates small shifts.';
+      return 'Balanced. Protects when you look away but tolerates '
+          'small shifts.';
     }
-    return 'Screen protects quickly at the slightest head turn. Best for high-privacy needs.';
+    return 'Protects at the slightest turn of the head. '
+        'Best for high-privacy work.';
   }
 }
