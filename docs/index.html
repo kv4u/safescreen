@@ -82,17 +82,17 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
 .title {
   font-family: var(--sans);
   font-weight: 800;
-  font-size: clamp(2.4rem, 7.6vw, 5.4rem);
+  font-size: clamp(2.3rem, 6.6vw, 4.7rem);
   line-height: .94;
   letter-spacing: -.045em;
-  margin: 34px 0 0;
+  margin: 28px 0 0;
   max-width: 17ch;
 }
 .title em { font-style: normal; color: var(--mute); }
 
-.deck {
-  margin: 26px 0 0; max-width: 62ch; font-size: 15px; color: var(--ink2);
-}
+/* Kept tight on purpose: every pixel here pushes the demo below the fold, and
+   the demo is the argument. */
+.deck { margin: 20px 0 0; max-width: 62ch; font-size: 15px; color: var(--ink2); }
 
 /* Spec sheet — the datasheet device that sets the whole tone. */
 .specs {
@@ -237,6 +237,14 @@ section { padding: 62px 0; }
   max-width: 100%; overflow-x: auto;
 }
 
+/* ── Situations ──────────────────────────────────────────────────────── */
+.cases { list-style: none; margin: 26px 0 0; padding: 0; border-top: 1px solid var(--rule); }
+.cases li { display: grid; gap: 2px 18px; padding: 13px 0; border-bottom: 1px solid var(--rule2); }
+@media (min-width: 640px) { .cases li { grid-template-columns: 26px 200px 1fr; align-items: baseline; } }
+.cases .a { color: var(--signal); }
+.cases b { font-family: var(--sans); font-weight: 800; letter-spacing: -.015em; font-size: .96rem; }
+.cases span.t { color: var(--ink2); }
+
 /* ── ASCII pipeline ──────────────────────────────────────────────────── */
 .ascii {
   margin: 0; padding: 22px; background: var(--card);
@@ -284,9 +292,10 @@ footer .spacer { margin-left: auto; }
   <div class="topline">
     <span class="id">SafeScreen</span>
     <span class="spacer"></span>
-    <a href="#how">01 Detection</a>
-    <a href="#frames">02 Frames</a>
-    <a href="#scope">03 Scope</a>
+    <a href="#what">01 In practice</a>
+    <a href="#how">02 Detection</a>
+    <a href="#frames">03 Frames</a>
+    <a href="#scope">04 Scope</a>
     <a href="https://github.com/kv4u/safescreen">Source</a>
   </div>
   <hr class="hr-heavy">
@@ -294,9 +303,14 @@ footer .spacer { margin-left: auto; }
   <h1 class="title">Your screen goes dark <em>when you look away.</em></h1>
 
   <p class="deck">
-    SafeScreen reads your head position through the webcam to work out whether
-    you are actually looking at the display, and blacks it out the moment you
-    are not — or the moment a second face appears behind you.
+    Most people reading your screen aren't snooping. They're just sitting behind
+    you, and screens are extremely readable. SafeScreen doesn't ask anyone to be
+    polite — it removes the opportunity.
+  </p>
+  <p class="deck">
+    It reads your head position through the webcam, and blacks the screen out
+    the moment you stop looking at it — or the moment a second face appears
+    behind you.
   </p>
 
   <div class="actions">
@@ -368,12 +382,110 @@ footer .spacer { margin-left: auto; }
   </div>
 </section>
 
-<!-- ── 01 Detection ────────────────────────────────────────────────────── -->
+<!-- ── 01 In practice ──────────────────────────────────────────────────── -->
+<section class="wrap" id="what">
+  <hr>
+  <div class="cols" style="padding-top:34px">
+    <div>
+      <p class="sec-num"><span class="fig">01</span><span class="lbl">In practice</span></p>
+    </div>
+    <div>
+      <h2 class="sec-title">For anyone who has ever angled their laptop away from someone.</h2>
+      <p class="sec-intro">
+        You know the moment. You tilt the screen a few degrees, or you casually
+        alt-tab to nothing in particular, and then you feel faintly ridiculous
+        for doing it. This is the fix for that reflex.
+      </p>
+
+      <ul class="cases">
+        <li>
+          <span class="a">→</span>
+          <b>Trains and planes</b>
+          <span class="t">A tray table is not a private office, and the person opposite has an excellent viewing angle.</span>
+        </li>
+        <li>
+          <span class="a">→</span>
+          <b>Open-plan offices</b>
+          <span class="t">Where "have you got a quick second?" arrives from behind you, mid-sentence, at walking pace.</span>
+        </li>
+        <li>
+          <span class="a">→</span>
+          <b>Cafés and libraries</b>
+          <span class="t">The best power socket is never the seat with its back to a wall.</span>
+        </li>
+        <li>
+          <span class="a">→</span>
+          <b>Getting up for coffee</b>
+          <span class="t">The most common way a screen gets read is nobody being at it. Walk away and it goes dark on its own.</span>
+        </li>
+      </ul>
+
+      <div class="blocks" style="margin-top:38px">
+        <div class="block">
+          <span class="n">→</span>
+          <h3>A second face is one too many</h3>
+          <div><p>
+            Shoulder-surfer detection protects the screen when someone else
+            appears in frame — even while you are still looking at it yourself.
+            On by default, and switchable off if you share a desk.
+          </p></div>
+        </div>
+        <div class="block">
+          <span class="n">→</span>
+          <h3>Adjustable patience</h3>
+          <div><p>
+            Five sensitivity steps, from "I fidget constantly" to "what is on
+            this screen must not leave this room". It changes both the angle it
+            tolerates and how eagerly it hides.
+          </p></div>
+        </div>
+        <div class="block">
+          <span class="n">→</span>
+          <h3>It learns your face, never your identity</h3>
+          <div><p>
+            Calibration works out your neutral head position so detection fits
+            your proportions rather than an average. It has no idea who you are,
+            and stores nothing that could work it out.
+          </p></div>
+        </div>
+        <div class="block">
+          <span class="n">→</span>
+          <h3>It shows its working</h3>
+          <div><p>
+            The status panel keeps a live count of capture files erased. A
+            privacy tool asking for your webcam should be able to prove what it
+            did with the frames, rather than asking nicely to be believed.
+          </p></div>
+        </div>
+        <div class="block">
+          <span class="n">→</span>
+          <h3>Quietly resident</h3>
+          <div><p>
+            Minimises to the system tray and keeps working. There is also an
+            in-app mode that blurs only its own window, if you would rather not
+            grant anything system-wide.
+          </p></div>
+        </div>
+        <div class="block">
+          <span class="n">→</span>
+          <h3>Breaks safely</h3>
+          <div><p>
+            Camera unplugged, detector wedged, frames stopped arriving — every
+            one of those hides the screen. It will never leave your work on
+            display because something failed quietly in the background.
+          </p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 02 Detection ────────────────────────────────────────────────────── -->
 <section class="wrap" id="how">
   <hr>
   <div class="cols" style="padding-top:34px">
     <div>
-      <p class="sec-num"><span class="fig">01</span><span class="lbl">Detection</span></p>
+      <p class="sec-num"><span class="fig">02</span><span class="lbl">Detection</span></p>
     </div>
     <div>
       <h2 class="sec-title">Geometry, not guesswork.</h2>
@@ -436,11 +548,11 @@ footer .spacer { margin-left: auto; }
   </div>
 </section>
 
-<!-- ── 02 Frames ───────────────────────────────────────────────────────── -->
+<!-- ── 03 Frames ───────────────────────────────────────────────────────── -->
 <section class="wrap" id="frames">
   <hr>
   <div class="cols" style="padding-top:34px">
-    <div><p class="sec-num"><span class="fig">02</span><span class="lbl">Frames</span></p></div>
+    <div><p class="sec-num"><span class="fig">03</span><span class="lbl">Frames</span></p></div>
     <div>
       <h2 class="sec-title">Where your camera frames actually go.</h2>
       <p class="sec-intro">
@@ -475,11 +587,11 @@ footer .spacer { margin-left: auto; }
   </div>
 </section>
 
-<!-- ── 03 Scope ────────────────────────────────────────────────────────── -->
+<!-- ── 04 Scope ────────────────────────────────────────────────────────── -->
 <section class="wrap" id="scope">
   <hr>
   <div class="cols" style="padding-top:34px">
-    <div><p class="sec-num"><span class="fig">03</span><span class="lbl">Scope</span></p></div>
+    <div><p class="sec-num"><span class="fig">04</span><span class="lbl">Scope</span></p></div>
     <div>
       <h2 class="sec-title">What it is not.</h2>
       <p class="sec-intro">A privacy tool that overstates itself is worse than none at all.</p>
@@ -510,11 +622,11 @@ footer .spacer { margin-left: auto; }
   </div>
 </section>
 
-<!-- ── 04 Verify ───────────────────────────────────────────────────────── -->
+<!-- ── 05 Verify ───────────────────────────────────────────────────────── -->
 <section class="wrap">
   <hr>
   <div class="cols" style="padding-top:34px">
-    <div><p class="sec-num"><span class="fig">04</span><span class="lbl">Verify</span></p></div>
+    <div><p class="sec-num"><span class="fig">05</span><span class="lbl">Verify</span></p></div>
     <div>
       <h2 class="sec-title">Check what you downloaded.</h2>
       <p class="sec-intro">
