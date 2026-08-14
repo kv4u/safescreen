@@ -126,9 +126,23 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
 
 /* ── Section scaffolding ─────────────────────────────────────────────── */
 section { padding: 62px 0; }
-.sec-num {
+/* Section marker: a large marginal figure over a small label. Replaces a "§",
+   which signalled "technical document" only to readers who already knew the
+   glyph and read as noise to everyone else. This also gives the narrow rail
+   something to hold — it was nearly empty before. */
+.sec-num { margin: 0 0 14px; display: flex; align-items: baseline; gap: 12px; }
+.sec-num .fig {
+  font-family: var(--sans); font-weight: 800;
+  font-size: 2rem; line-height: .9; letter-spacing: -.05em;
+  color: var(--signal);
+}
+.sec-num .lbl {
   font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--signal); margin: 0 0 14px;
+  color: var(--mute);
+}
+@media (min-width: 900px) {
+  .sec-num { display: block; padding-top: 6px; border-top: 2px solid var(--ink); }
+  .sec-num .fig { display: block; font-size: 3.1rem; margin-bottom: 4px; }
 }
 .sec-title {
   font-family: var(--sans); font-weight: 800;
@@ -359,7 +373,7 @@ footer .spacer { margin-left: auto; }
   <hr>
   <div class="cols" style="padding-top:34px">
     <div>
-      <p class="sec-num">§ 01 — Detection</p>
+      <p class="sec-num"><span class="fig">01</span><span class="lbl">Detection</span></p>
     </div>
     <div>
       <h2 class="sec-title">Geometry, not guesswork.</h2>
@@ -426,7 +440,7 @@ footer .spacer { margin-left: auto; }
 <section class="wrap" id="frames">
   <hr>
   <div class="cols" style="padding-top:34px">
-    <div><p class="sec-num">§ 02 — Frames</p></div>
+    <div><p class="sec-num"><span class="fig">02</span><span class="lbl">Frames</span></p></div>
     <div>
       <h2 class="sec-title">Where your camera frames actually go.</h2>
       <p class="sec-intro">
@@ -465,7 +479,7 @@ footer .spacer { margin-left: auto; }
 <section class="wrap" id="scope">
   <hr>
   <div class="cols" style="padding-top:34px">
-    <div><p class="sec-num">§ 03 — Scope</p></div>
+    <div><p class="sec-num"><span class="fig">03</span><span class="lbl">Scope</span></p></div>
     <div>
       <h2 class="sec-title">What it is not.</h2>
       <p class="sec-intro">A privacy tool that overstates itself is worse than none at all.</p>
@@ -500,7 +514,7 @@ footer .spacer { margin-left: auto; }
 <section class="wrap">
   <hr>
   <div class="cols" style="padding-top:34px">
-    <div><p class="sec-num">§ 04 — Verify</p></div>
+    <div><p class="sec-num"><span class="fig">04</span><span class="lbl">Verify</span></p></div>
     <div>
       <h2 class="sec-title">Check what you downloaded.</h2>
       <p class="sec-intro">
