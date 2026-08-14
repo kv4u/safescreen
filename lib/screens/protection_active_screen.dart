@@ -77,6 +77,10 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
           _isStarting = false;
           _error = msg;
         });
+        // A camera failure can arrive while the blackout is already up — a
+        // yanked USB webcam, for instance. Stand the window back down so the
+        // error is readable and dismissable rather than fullscreen.
+        if (Platform.isWindows) _applyWindowMode();
       },
     );
     if (Platform.isWindows) {
@@ -129,13 +133,23 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
     } catch (_) {}
   }
 
+  /// Whether the fullscreen blackout should currently be covering the screen.
+  ///
+  /// Note the two guards beyond the detector state. The detector fails closed,
+  /// so `isScreenVisible` is false while starting up and after a camera error —
+  /// states where there is nothing to protect because the camera never opened.
+  /// Escalating those to a fullscreen, always-on-top, self-refocusing window
+  /// leaves the user with an error message they cannot alt-tab away from.
+  bool get _blackoutWanted =>
+      !_isStarting && _error == null && !_gazeDetector.isScreenVisible;
+
   /// If the blackout loses focus while the screen is meant to be protected,
   /// put it back on top. Otherwise alt-tab or a notification toast would
   /// reveal exactly the content the blackout exists to hide.
   @override
   void onWindowBlur() {
     if (!Platform.isWindows || !mounted) return;
-    if (_gazeDetector.isScreenVisible) return;
+    if (!_blackoutWanted) return;
     _enqueueWindowOp(() async {
       await windowManager.setAlwaysOnTop(true);
       await windowManager.show();
@@ -166,14 +180,14 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
   void _applyWindowMode() {
     if (!mounted || !Platform.isWindows) return;
     _enqueueWindowOp(() async {
-      final bool isVisible = _gazeDetector.isScreenVisible;
-      if (!isVisible && !_overlayActive) {
+      final bool wantBlackout = _blackoutWanted;
+      if (wantBlackout && !_overlayActive) {
         _overlayActive = true;
         await windowManager.show();
         await windowManager.setFullScreen(true);
         await windowManager.setAlwaysOnTop(true);
         await windowManager.focus();
-      } else if (isVisible && _overlayActive) {
+      } else if (!wantBlackout && _overlayActive) {
         _overlayActive = false;
         await windowManager.setFullScreen(false);
         await windowManager.setAlwaysOnTop(true);

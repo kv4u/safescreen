@@ -20,7 +20,7 @@ jobs:
     name: Analyze & test
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: subosito/flutter-action@v2
         with:
@@ -47,7 +47,7 @@ jobs:
     runs-on: windows-2022
     needs: analyze-and-test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: subosito/flutter-action@v2
         with:
@@ -72,7 +72,7 @@ jobs:
       # debugging CI, not for distribution. Released binaries come from
       # release.yml, which builds from a tag.
       - name: Upload build output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: safescreen-windows-ci
           path: build/windows/x64/runner/Release/

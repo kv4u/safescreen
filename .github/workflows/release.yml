@@ -20,7 +20,7 @@ jobs:
     name: Build and publish Windows release
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
@@ -50,34 +50,40 @@ jobs:
         id: package
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $tag = "${{ github.event.inputs.tag }}"
           if (-not $tag) { $tag = "${{ github.ref_name }}" }
           $name = "SafeScreen-windows-x64"
-          New-Item -ItemType Directory -Force dist | Out-Null
+          New-Item -ItemType Directory -Force dist    | Out-Null
+          New-Item -ItemType Directory -Force staging | Out-Null
 
-          Compress-Archive `
-            -Path build/windows/x64/runner/Release/* `
-            -DestinationPath "dist/$name.zip"
+          # Stage the app and its documentation together, so the docs end up
+          # INSIDE the archive. Someone about to run an unsigned binary should
+          # find SECURITY.md next to the exe, not have to go back to the repo
+          # for it.
+          Copy-Item build/windows/x64/runner/Release/* staging -Recurse -Force
+          Copy-Item README.md, LICENSE, SECURITY.md, PRIVACY.md staging -Force
 
-          # Ship the docs a user needs before running an unsigned binary.
-          Copy-Item README.md, LICENSE, SECURITY.md, PRIVACY.md dist/
+          Compress-Archive -Path staging/* -DestinationPath "dist/$name.zip"
+
+          if (-not (Test-Path "dist/$name.zip")) { throw "packaging produced no archive" }
 
           $hash = (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash
           "$hash  $name.zip" | Out-File -FilePath dist/SHA256SUMS.txt -Encoding utf8
 
-          Write-Output "tag=$tag" >> $env:GITHUB_OUTPUT
-          Write-Output "zip=dist/$name.zip" >> $env:GITHUB_OUTPUT
+          "tag=$tag"            | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "zip=dist/$name.zip"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Output "SHA256: $hash"
 
       # Lets users cryptographically confirm the zip came from this workflow
       # and this commit, which matters more than usual for an unsigned binary.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.package.outputs.zip }}
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.package.outputs.tag }}
           name: SafeScreen ${{ steps.package.outputs.tag }}
