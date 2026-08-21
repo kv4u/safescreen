@@ -101,13 +101,18 @@ desk, or a room you stepped out of without locking.
   APIs.
 - **Anyone who can run code as you.** They can terminate SafeScreen.
 - **Cameras pointed at your screen.** Obviously.
-- **Multi-monitor setups.** See below.
 
 ### Current limitations that have security consequences
 
-- **Only one monitor is covered.** The blackout is a single fullscreen window.
-  On a multi-monitor setup, your other displays remain fully visible when you
-  look away. This is a real hole and it is the second roadmap item.
+- **Mixed-DPI multi-monitor is approximate.** <a id="multi-monitor"></a>The
+  blackout now spans every display. On a single display it uses exclusive
+  fullscreen, which is exact and also hides the taskbar. Across multiple
+  displays it sizes a window to the union of their bounds — and because
+  `screen_retriever` reports each monitor divided by *that monitor's own* scale
+  factor while `window_manager` converts back using the window's DPI, a desk
+  mixing scale factors can leave the cover slightly misaligned. The taskbar may
+  also stay visible in this mode. If the union looks implausible, SafeScreen
+  falls back to single-display fullscreen rather than trusting a bad rectangle.
 - **The overlay can be dismissed.** Alt-tab is countered by re-asserting
   always-on-top when the window loses focus, but a determined local user can
   still close or kill the process.

@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../services/camera_gaze_service.dart';
@@ -169,6 +170,57 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
     });
   }
 
+  /// Expands the blackout across every display.
+  ///
+  /// `setFullScreen` only ever covers the monitor the window happens to be on,
+  /// so on a multi-monitor desk every other screen stayed perfectly readable
+  /// while the user was away. That is the hole this closes.
+  ///
+  /// A caveat worth stating rather than burying: screen_retriever reports each
+  /// monitor's geometry divided by *that monitor's own* scale factor, while
+  /// window_manager converts bounds back using the window's current DPI. On a
+  /// mixed-DPI desk those two disagree and the cover can land slightly off. A
+  /// single-display setup therefore keeps the setFullScreen path, which is
+  /// exact and additionally hides the taskbar.
+  Future<void> _coverAllDisplays() async {
+    List<Display> displays = const <Display>[];
+    try {
+      displays = await screenRetriever.getAllDisplays();
+    } catch (e) {
+      debugPrint('SafeScreen: could not enumerate displays: $e');
+    }
+
+    if (displays.length < 2) {
+      await windowManager.setFullScreen(true);
+      return;
+    }
+
+    Rect? union;
+    for (final Display d in displays) {
+      final Offset origin = d.visiblePosition ?? Offset.zero;
+      final Rect r = Rect.fromLTWH(
+        origin.dx,
+        origin.dy,
+        d.size.width,
+        d.size.height,
+      );
+      if (r.isEmpty) continue;
+      union = union == null ? r : union.expandToInclude(r);
+    }
+
+    // Never trust a nonsensical rectangle. A bad cover is worse than a
+    // single-monitor one, because it could leave the primary screen bare while
+    // the app believes it is protected.
+    if (union == null || union.width < 200 || union.height < 200) {
+      debugPrint('SafeScreen: display union looked wrong, using fullscreen');
+      await windowManager.setFullScreen(true);
+      return;
+    }
+
+    await windowManager.setFullScreen(false);
+    await windowManager.setBounds(union);
+  }
+
   void _applyWindowMode() {
     if (!mounted || !Platform.isWindows) return;
     _enqueueWindowOp(() async {
@@ -176,7 +228,7 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
       if (wantBlackout && !_overlayActive) {
         _overlayActive = true;
         await windowManager.show();
-        await windowManager.setFullScreen(true);
+        await _coverAllDisplays();
         await windowManager.setAlwaysOnTop(true);
         await windowManager.focus();
       } else if (!wantBlackout && _overlayActive) {

@@ -52,6 +52,11 @@ First public release. Windows is the supported platform.
 
 ### Fixed
 
+- **The blackout covers every display.** Previously it was a single fullscreen
+  window, so on a multi-monitor desk every other screen stayed perfectly
+  readable while the user was away. A single display still uses exclusive
+  fullscreen; several are covered by a window spanning the union of their
+  bounds, with a fallback to fullscreen if that union looks implausible.
 - **Captured frames no longer land in the user's Pictures folder.** The
   upstream `camera_windows` plugin writes every `takePicture()` frame to
   `FOLDERID_Pictures`, which is Search-indexed, thumbnailed, and typically
@@ -79,7 +84,8 @@ First public release. Windows is the supported platform.
   being erased. Eliminating disk writes entirely requires a native Media
   Foundation capture path. See
   [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
-- Only the primary monitor is covered by the blackout.
+- On a desk mixing display scale factors, the multi-monitor cover can land
+  slightly off. See [SECURITY.md](SECURITY.md#multi-monitor).
 - Android support is experimental and unsupported.
 
 [1.0.0]: https://github.com/kv4u/safescreen/releases/tag/v1.0.0
