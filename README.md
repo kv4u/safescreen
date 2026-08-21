@@ -43,6 +43,8 @@ goes black until you are the only one looking at it again.
   head position over time.
 - **Shoulder-surfer detection.** A second face in view protects the screen,
   even while you are still looking at it.
+- **Covers every display.** The blackout spans the whole desktop, not just the
+  monitor the app happens to sit on.
 - **Fails closed.** Camera unplugged, detector wedged, frames stopped arriving?
   The screen protects itself. It never stays exposed because something broke.
 - **Tray-resident.** Minimises out of the way and keeps working.
@@ -116,8 +118,9 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 
 ## Known limitations
 
-- **Only the primary monitor is covered.** Other displays stay visible when you
-  look away. Roadmap item #2.
+- **Mixed-DPI multi-monitor is approximate.** All displays are covered, but
+  when monitors run at different scale factors the cover can land slightly off.
+  See [SECURITY.md](SECURITY.md#multi-monitor).
 - **Frames touch disk briefly.** In private temp storage, erased immediately —
   but written. In-memory capture is roadmap item #1. See
   [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
@@ -132,10 +135,9 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 
 1. **In-memory capture** via a native Media Foundation plugin, removing disk
    writes entirely and letting the vendored `camera_windows` fork be dropped.
-2. **Multi-monitor blackout** spanning the full virtual desktop.
-3. Optional session lock after a configurable absence.
-4. Start-with-Windows option.
-5. Signed binaries, if funding for a certificate ever appears.
+2. Optional session lock after a configurable absence.
+3. Start-with-Windows option.
+4. Signed binaries, if funding for a certificate ever appears.
 
 ## Building from source
 

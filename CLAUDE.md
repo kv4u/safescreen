@@ -93,7 +93,9 @@ errors, and sweeps survivors on shutdown.
 - System tray via `tray_manager`.
 - Face detection uses `face_detection_tflite` (ML Kit is Android/iOS only).
 - `camera_windows` is pinned to `0.2.6+2`; later versions require Dart ≥ 3.8.
-- Only the primary monitor is covered — a known limitation.
+- The blackout spans all displays: exclusive fullscreen for one, a window
+  sized to the union of display bounds for several. Mixed-DPI desks are
+  approximate — see `_coverAllDisplays`.
 
 ### Operation Modes
 
