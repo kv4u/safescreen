@@ -12,6 +12,7 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../services/camera_gaze_service.dart';
+import '../services/display_geometry.dart';
 import '../services/gaze_detector_service.dart';
 import '../services/head_pose_estimator.dart';
 import '../services/settings_service.dart';
@@ -176,12 +177,17 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
   /// so on a multi-monitor desk every other screen stayed perfectly readable
   /// while the user was away. That is the hole this closes.
   ///
-  /// A caveat worth stating rather than burying: screen_retriever reports each
-  /// monitor's geometry divided by *that monitor's own* scale factor, while
-  /// window_manager converts bounds back using the window's current DPI. On a
-  /// mixed-DPI desk those two disagree and the cover can land slightly off. A
-  /// single-display setup therefore keeps the setFullScreen path, which is
-  /// exact and additionally hides the taskbar.
+  /// The coordinate handling is the fiddly part. screen_retriever reports each
+  /// monitor already divided by *that monitor's own* scale factor, while
+  /// setBounds multiplies whatever it receives by *the window's* device pixel
+  /// ratio. Unioning the reported values directly mixes coordinate spaces, and
+  /// on a mixed-DPI desk that under-covers — by well over a thousand physical
+  /// pixels in the case covered by the tests, which is a whole readable strip
+  /// of monitor. computeCoverRect converts everything to physical pixels, unions
+  /// there, and converts once into the window's space.
+  ///
+  /// A single display keeps the setFullScreen path: it is exact, and unlike a
+  /// spanning window it also hides the taskbar.
   Future<void> _coverAllDisplays() async {
     List<Display> displays = const <Display>[];
     try {
@@ -195,30 +201,33 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
       return;
     }
 
-    Rect? union;
-    for (final Display d in displays) {
-      final Offset origin = d.visiblePosition ?? Offset.zero;
-      final Rect r = Rect.fromLTWH(
-        origin.dx,
-        origin.dy,
-        d.size.width,
-        d.size.height,
-      );
-      if (r.isEmpty) continue;
-      union = union == null ? r : union.expandToInclude(r);
-    }
+    final CoverRect? cover = computeCoverRect(
+      displays.map((Display d) {
+        final Offset origin = d.visiblePosition ?? Offset.zero;
+        return DisplayBounds(
+          left: origin.dx,
+          top: origin.dy,
+          width: d.size.width,
+          height: d.size.height,
+          scaleFactor: (d.scaleFactor ?? 1).toDouble(),
+        );
+      }).toList(),
+      windowScaleFactor: windowManager.getDevicePixelRatio(),
+    );
 
     // Never trust a nonsensical rectangle. A bad cover is worse than a
     // single-monitor one, because it could leave the primary screen bare while
     // the app believes it is protected.
-    if (union == null || union.width < 200 || union.height < 200) {
+    if (cover == null || cover.width < 200 || cover.height < 200) {
       debugPrint('SafeScreen: display union looked wrong, using fullscreen');
       await windowManager.setFullScreen(true);
       return;
     }
 
     await windowManager.setFullScreen(false);
-    await windowManager.setBounds(union);
+    await windowManager.setBounds(
+      Rect.fromLTWH(cover.left, cover.top, cover.width, cover.height),
+    );
   }
 
   void _applyWindowMode() {

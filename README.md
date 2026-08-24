@@ -118,8 +118,9 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 
 ## Known limitations
 
-- **Mixed-DPI multi-monitor is approximate.** All displays are covered, but
-  when monitors run at different scale factors the cover can land slightly off.
+- **The taskbar may stay visible on multi-monitor setups.** All displays are
+  covered, including mixed-DPI ones, but the spanning window does not suppress
+  the taskbar the way exclusive fullscreen does.
   See [SECURITY.md](SECURITY.md#multi-monitor).
 - **Frames touch disk briefly.** In private temp storage, erased immediately —
   but written. In-memory capture is roadmap item #1. See

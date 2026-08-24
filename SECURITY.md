@@ -104,15 +104,14 @@ desk, or a room you stepped out of without locking.
 
 ### Current limitations that have security consequences
 
-- **Mixed-DPI multi-monitor is approximate.** <a id="multi-monitor"></a>The
-  blackout now spans every display. On a single display it uses exclusive
-  fullscreen, which is exact and also hides the taskbar. Across multiple
-  displays it sizes a window to the union of their bounds — and because
-  `screen_retriever` reports each monitor divided by *that monitor's own* scale
-  factor while `window_manager` converts back using the window's DPI, a desk
-  mixing scale factors can leave the cover slightly misaligned. The taskbar may
-  also stay visible in this mode. If the union looks implausible, SafeScreen
-  falls back to single-display fullscreen rather than trusting a bad rectangle.
+- **The taskbar can stay visible across multiple monitors.**
+  <a id="multi-monitor"></a>The blackout spans every display. A single display
+  uses exclusive fullscreen, which also hides the taskbar; several displays are
+  covered by a window sized to the union of their bounds, and that window does
+  not suppress the taskbar. Display geometry is computed in physical pixels
+  (see `display_geometry.dart`) so mixed scale factors are handled correctly,
+  and if the computed rectangle looks implausible SafeScreen falls back to
+  single-display fullscreen rather than trusting it.
 - **The overlay can be dismissed.** Alt-tab is countered by re-asserting
   always-on-top when the window loses focus, but a determined local user can
   still close or kill the process.
