@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'screens/privacy_screen.dart';
 import 'screens/protection_active_screen.dart';
+import 'services/camera_selection.dart';
 import 'services/settings_service.dart';
 import 'theme/tokens.dart';
 import 'overlay/overlay_screen.dart';
@@ -127,6 +128,8 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
   /// can see which device this is about before granting it their face.
   String? _cameraName;
 
+  bool _cameraIsVirtual = false;
+
   String get _cameraLabel => _cameraName ?? 'Detected';
 
   @override
@@ -232,17 +235,25 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
         }
         return;
       }
-      // Prefer the front camera, matching what CameraGazeService will pick.
-      final Iterable<CameraDescription> front = cameras.where(
-        (CameraDescription c) => c.lensDirection == CameraLensDirection.front,
+      // Same rule CameraGazeService applies, so the panel reports the device
+      // that will actually be used.
+      final CameraChoice? choice = chooseCamera(
+        cameras
+            .map(
+              (CameraDescription c) => CameraOption(
+                name: c.name,
+                isFront: c.lensDirection == CameraLensDirection.front,
+              ),
+            )
+            .toList(),
       );
-      final CameraDescription chosen =
-          front.isNotEmpty ? front.first : cameras.first;
 
       if (mounted) {
         setState(() {
           _checking = false;
-          _cameraName = chosen.name.trim().isEmpty ? null : chosen.name.trim();
+          final String name = choice?.option.name.trim() ?? '';
+          _cameraName = name.isEmpty ? null : name;
+          _cameraIsVirtual = choice?.isVirtual ?? false;
         });
       }
     } catch (e) {
@@ -413,6 +424,10 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
         const Rule(faint: true),
         const SpecRow(label: 'Network', value: 'None', emphasis: true),
         const Rule(),
+        if (_cameraIsVirtual) ...[
+          const SizedBox(height: S.x4),
+          _buildVirtualCameraWarning(),
+        ],
         const SizedBox(height: S.x6),
         PanelButton(
           label: Platform.isAndroid ? 'Start overlay' : 'Start protection',
@@ -429,6 +444,42 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
         const SizedBox(height: S.x6),
         _buildSettings(),
       ],
+    );
+  }
+
+  /// Says plainly that shoulder-surfer detection cannot be trusted here.
+  ///
+  /// Virtual camera software blurs or replaces the background before SafeScreen
+  /// sees anything, and a person standing behind the user *is* the background.
+  /// The detector would go on reporting "watching" while detecting nobody,
+  /// which is the kind of silent failure a privacy tool must never ship.
+  Widget _buildVirtualCameraWarning() {
+    return Container(
+      decoration: BoxDecoration(border: Border.all(color: C.signal, width: 2)),
+      padding: const EdgeInsets.all(S.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'VIRTUAL CAMERA IN USE',
+            style: T.label.copyWith(color: C.signal),
+          ),
+          const SizedBox(height: S.x2),
+          Text(
+            'This camera applies effects before SafeScreen sees a frame. If '
+            'background blur or replacement is on, someone standing behind '
+            'you is erased from the image, and shoulder-surfer detection '
+            'will not see them.',
+            style: T.body,
+          ),
+          const SizedBox(height: S.x3),
+          Text(
+            'Look-away detection is unaffected. For shoulder-surfer '
+            'detection, use your physical webcam instead.',
+            style: T.body,
+          ),
+        ],
+      ),
     );
   }
 

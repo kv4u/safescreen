@@ -102,6 +102,44 @@ desk, or a room you stepped out of without locking.
 - **Anyone who can run code as you.** They can terminate SafeScreen.
 - **Cameras pointed at your screen.** Obviously.
 
+### Camera effects can silently defeat shoulder-surfer detection
+
+<a id="camera-effects"></a>Anything that processes the video before SafeScreen
+receives it can remove the very person shoulder-surfer detection exists to
+catch. A person standing behind you *is* the background, so background blur or
+background replacement erases them from the frame. The detector then sees one
+face, reports "watching", and detects nothing. **This fails silently** — there
+is no error, and the feature appears to be working.
+
+Two distinct cases, and only the first is avoidable:
+
+**Virtual camera software** — NVIDIA Broadcast, OBS Virtual Camera, XSplit VCam
+and similar. These appear as ordinary webcams, and the previous camera choice
+("first front-facing device") could easily land on one. SafeScreen now prefers
+a physical camera whenever one exists, and when only a virtual device is
+available it says so in the panel rather than claiming protection it cannot
+give. See `lib/services/camera_selection.dart`.
+
+**Windows Studio Effects** — on Copilot+ hardware, Windows applies the same
+class of processing inside the OS camera pipeline, to the physical device.
+SafeScreen cannot detect or avoid this; the device name is unchanged and the
+frames simply arrive already processed. Three of its effects matter here:
+
+| Effect | Consequence |
+|---|---|
+| Background blur | A shoulder surfer is blurred out of the frame |
+| Automatic framing | The crop follows you, cutting others out entirely |
+| Eye contact | Eyes are synthetically redirected toward the camera, which can make looking away undetectable |
+
+Eye contact correction is the most serious: it attacks look-away detection
+itself, not just the shoulder-surfer feature. **If you are on a Copilot+ PC,
+turn Studio Effects off for SafeScreen** in Settings → Bluetooth & devices →
+Cameras.
+
+More generally: SafeScreen trusts the frames it is given. Any layer between the
+sensor and the app can lie to it, and there is no way from user space to prove
+that a frame is unmodified.
+
 ### Current limitations that have security consequences
 
 - **The taskbar can stay visible across multiple monitors.**

@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:face_detection_tflite/face_detection_tflite.dart' as tflite;
 
+import 'camera_selection.dart';
 import 'gaze_detector_service.dart';
 import 'head_pose_estimator.dart';
 import 'secure_frame_store.dart';
@@ -76,6 +77,18 @@ class CameraGazeService {
   /// The mode the camera actually accepted, once running.
   ResolutionPreset? get activeResolution => _activeResolution;
 
+  String? _cameraName;
+  bool _isVirtualCamera = false;
+
+  /// Name of the camera actually in use.
+  String? get cameraName => _cameraName;
+
+  /// True when the active camera is virtual-camera software rather than
+  /// hardware. Background blur or replacement in such software removes anyone
+  /// standing behind the user, so shoulder-surfer detection cannot be relied
+  /// on. The UI must say so rather than reporting protection it cannot give.
+  bool get isVirtualCamera => _isVirtualCamera;
+
   HeadPose? _lastPose;
 
   /// The most recent usable head-pose reading, for the status readout. Null
@@ -111,11 +124,33 @@ class CameraGazeService {
       onError?.call('No camera found on this device.');
       return;
     }
-    final Iterable<CameraDescription> front = cameras.where(
-      (c) => c.lensDirection == CameraLensDirection.front,
+    // Prefer real hardware. Virtual camera software applies background blur or
+    // replacement before any frame reaches us, which erases the very person
+    // shoulder-surfer detection exists to catch — silently. See
+    // camera_selection.dart.
+    final CameraChoice? choice = chooseCamera(
+      cameras
+          .map(
+            (CameraDescription c) => CameraOption(
+              name: c.name,
+              isFront: c.lensDirection == CameraLensDirection.front,
+            ),
+          )
+          .toList(),
     );
-    final CameraDescription camera =
-        front.isNotEmpty ? front.first : cameras.first;
+    if (choice == null) {
+      onError?.call('No camera found on this device.');
+      return;
+    }
+    _cameraName = choice.option.name;
+    _isVirtualCamera = choice.isVirtual;
+    if (choice.isVirtual) {
+      debugPrint(
+        'SafeScreen: only a virtual camera is available (${choice.option.name}); '
+        'background effects may defeat shoulder-surfer detection',
+      );
+    }
+    final CameraDescription camera = cameras[choice.index];
 
     _controller = await _initializeWithFallback(camera);
     if (_controller == null) return; // onError already reported
@@ -413,6 +448,8 @@ class CameraGazeService {
     _isProcessing = false;
     _activeResolution = null;
     _lastPose = null;
+    _cameraName = null;
+    _isVirtualCamera = false;
 
     // Last line of defence: destroy any capture file that outlived its read.
     await _frameStore.sweep();

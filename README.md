@@ -125,6 +125,12 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 - **Frames touch disk briefly.** In private temp storage, erased immediately —
   but written. In-memory capture is roadmap item #1. See
   [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
+- **Camera effects defeat shoulder-surfer detection.** Background blur or
+  replacement erases anyone standing behind you before SafeScreen sees the
+  frame. It now prefers a physical camera over virtual ones and warns when it
+  cannot, but Windows Studio Effects applies to the physical device itself and
+  is undetectable from here — turn it off.
+  See [SECURITY.md](SECURITY.md#camera-effects).
 - **Not a lock screen.** SafeScreen does not authenticate anyone and will not
   stop someone using your keyboard. Use `Win`+`L`.
 - **Poor lighting degrades detection.** Backlighting in particular. The failure

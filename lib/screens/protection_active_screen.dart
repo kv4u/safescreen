@@ -474,6 +474,16 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
           value: _cameraGazeService.isPitchCalibrated ? 'Learned' : 'Learning',
         ),
         const Rule(faint: true),
+        SpecRow(
+          label: 'Shoulder',
+          value:
+              _cameraGazeService.isVirtualCamera
+                  ? 'Unreliable — effects cam'
+                  : (_gazeDetector.detectShoulderSurfers ? 'Watching' : 'Off'),
+          valueColor: _cameraGazeService.isVirtualCamera ? C.signal : C.ink,
+          emphasis: _cameraGazeService.isVirtualCamera,
+        ),
+        const Rule(faint: true),
         SpecRow(label: 'Capture', value: _captureModeLabel),
         const Rule(faint: true),
         SpecRow(

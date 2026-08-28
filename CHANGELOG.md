@@ -60,6 +60,14 @@ First public release. Windows is the supported platform.
   Display geometry is unioned in physical pixels rather than in each monitor's
   own logical pixels — mixing those spaces under-covered a mixed-DPI desk by
   more than a thousand pixels, leaving a readable strip of screen exposed.
+- **Virtual cameras no longer silently defeat shoulder-surfer detection.** The
+  camera was chosen as "the first front-facing device", which on a machine
+  running NVIDIA Broadcast or OBS could hand SafeScreen a stream whose
+  background — including anyone standing behind the user — was already blurred
+  or replaced. The feature reported "watching" and detected nothing. SafeScreen
+  now prefers physical hardware and warns plainly when only a virtual camera is
+  available. Windows Studio Effects remains undetectable from user space and is
+  documented rather than handled.
 - **Captured frames no longer land in the user's Pictures folder.** The
   upstream `camera_windows` plugin writes every `takePicture()` frame to
   `FOLDERID_Pictures`, which is Search-indexed, thumbnailed, and typically
@@ -89,6 +97,10 @@ First public release. Windows is the supported platform.
   [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
 - The taskbar can remain visible when the blackout spans several monitors,
   since that mode does not use exclusive fullscreen.
+- Windows Studio Effects (background blur, automatic framing, eye contact) is
+  applied inside the OS camera pipeline and cannot be detected from user space.
+  It can defeat both shoulder-surfer and look-away detection. See
+  [SECURITY.md](SECURITY.md#camera-effects).
 - Android support is experimental and unsupported.
 
 [1.0.0]: https://github.com/kv4u/safescreen/releases/tag/v1.0.0
