@@ -5,6 +5,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'dart:typed_data';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
@@ -411,8 +413,13 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
 
   Widget _buildStatus(bool isVisible) {
     final CameraController? controller = _cameraGazeService.controller;
+    // On the in-memory path there is no CameraController to preview from --
+    // not starting one is the point -- so the preview renders the same frames
+    // the detector is looking at.
+    final Uint8List? nativeFrame = _cameraGazeService.lastFrameBytes;
     final bool hasPreview =
-        controller != null && controller.value.isInitialized;
+        (controller != null && controller.value.isInitialized) ||
+        nativeFrame != null;
     final Color tone = isVisible ? C.clear : C.signal;
     final HeadPose? pose = _cameraGazeService.lastPose;
     final int failures = _cameraGazeService.shredFailures;
@@ -447,13 +454,20 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
           // forcing a 4:3 box wider than the panel.
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 150),
-            child: AspectRatio(
-              aspectRatio:
-                  controller.value.aspectRatio == 0
-                      ? 4 / 3
-                      : controller.value.aspectRatio,
-              child: CameraPreview(controller),
-            ),
+            child:
+                controller != null && controller.value.isInitialized
+                    ? AspectRatio(
+                      aspectRatio:
+                          controller.value.aspectRatio == 0
+                              ? 4 / 3
+                              : controller.value.aspectRatio,
+                      child: CameraPreview(controller),
+                    )
+                    : Image.memory(
+                      nativeFrame!,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.low,
+                    ),
           ),
         ],
 
@@ -482,6 +496,16 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
                   : (_gazeDetector.detectShoulderSurfers ? 'Watching' : 'Off'),
           valueColor: _cameraGazeService.isVirtualCamera ? C.signal : C.ink,
           emphasis: _cameraGazeService.isVirtualCamera,
+        ),
+        const Rule(faint: true),
+        SpecRow(
+          label: 'Frames',
+          value:
+              _cameraGazeService.isInMemoryCapture
+                  ? 'In memory'
+                  : 'Via disk (fallback)',
+          valueColor: _cameraGazeService.isInMemoryCapture ? C.clear : C.ink,
+          emphasis: _cameraGazeService.isInMemoryCapture,
         ),
         const Rule(faint: true),
         SpecRow(label: 'Capture', value: _captureModeLabel),
@@ -517,6 +541,9 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
   }
 
   String get _captureModeLabel {
+    if (_cameraGazeService.isInMemoryCapture) {
+      return '${_cameraGazeService.frameWidth}x${_cameraGazeService.frameHeight}';
+    }
     final ResolutionPreset? p = _cameraGazeService.activeResolution;
     return switch (p) {
       ResolutionPreset.low => '240p',

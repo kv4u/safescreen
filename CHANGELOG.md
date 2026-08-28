@@ -60,6 +60,12 @@ First public release. Windows is the supported platform.
   Display geometry is unioned in physical pixels rather than in each monitor's
   own logical pixels — mixing those spaces under-covered a mixed-DPI desk by
   more than a thousand pixels, leaving a readable strip of screen exposed.
+- **Camera frames no longer touch the disk.** SafeScreen now captures through
+  its own Media Foundation path (`windows/runner/mf_camera.cpp`), reading frames
+  into memory instead of relying on `takePicture()`, whose only way to produce a
+  frame is to encode a JPEG to disk first. The plugin path remains as a fallback
+  so protection is never lost on machines where in-memory capture will not
+  start, and the status console reports which is live.
 - **Virtual cameras no longer silently defeat shoulder-surfer detection.** The
   camera was chosen as "the first front-facing device", which on a machine
   running NVIDIA Broadcast or OBS could hand SafeScreen a stream whose
@@ -91,10 +97,9 @@ First public release. Windows is the supported platform.
 
 ### Known issues
 
-- Camera frames still touch the disk briefly, in private temp storage, before
-  being erased. Eliminating disk writes entirely requires a native Media
-  Foundation capture path. See
-  [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
+- On the fallback capture path only, frames are briefly written to private temp
+  storage before being erased. The status console reports when this path is in
+  use. See [SECURITY.md](SECURITY.md#how-camera-frames-are-handled).
 - The taskbar can remain visible when the blackout spans several monitors,
   since that mode does not use exclusive fullscreen.
 - Windows Studio Effects (background blur, automatic framing, eye contact) is

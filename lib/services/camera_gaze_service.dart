@@ -12,6 +12,7 @@
 
 import 'dart:async';
 import 'dart:io';
+
 import 'dart:ui' show Size;
 
 import 'package:camera/camera.dart';
@@ -22,6 +23,7 @@ import 'package:face_detection_tflite/face_detection_tflite.dart' as tflite;
 import 'camera_selection.dart';
 import 'gaze_detector_service.dart';
 import 'head_pose_estimator.dart';
+import 'native_camera.dart';
 import 'secure_frame_store.dart';
 
 class CameraGazeService {
@@ -47,6 +49,7 @@ class CameraGazeService {
   // Windows
   tflite.FaceDetector? _tfliteDetector;
   final SecureFrameStore _frameStore = SecureFrameStore();
+  final NativeCameraCapture _nativeCamera = NativeCameraCapture();
   final PitchBaseline _pitchBaseline = PitchBaseline();
   Timer? _nextCapture;
   bool _stopping = false;
@@ -95,6 +98,20 @@ class CameraGazeService {
   /// when no face is in frame or the keypoints were unusable.
   HeadPose? get lastPose => _lastPose;
 
+  /// True when frames come from the in-memory Media Foundation path and never
+  /// touch the disk. False means the takePicture fallback is in use.
+  bool get isInMemoryCapture => _nativeCamera.isRunning;
+
+  Uint8List? _lastFrame;
+
+  /// The most recent frame, as an encoded image. Only populated on the
+  /// in-memory path, where there is no CameraController to preview from.
+  Uint8List? get lastFrameBytes => _lastFrame;
+
+  /// Frame dimensions on the in-memory path; zero otherwise.
+  int get frameWidth => _nativeCamera.width;
+  int get frameHeight => _nativeCamera.height;
+
   /// Sampling cadence. Faster while the screen is exposed, because that is when
   /// a missed look-away actually costs something; slower while already
   /// protected, which halves the number of frames written to disk when the user
@@ -103,8 +120,9 @@ class CameraGazeService {
   static const Duration _intervalWhileProtected = Duration(milliseconds: 400);
 
   bool get isRunning =>
-      _controller != null &&
-      (_controller!.value.isStreamingImages || _nextCapture != null);
+      _nativeCamera.isRunning ||
+      (_controller != null &&
+          (_controller!.value.isStreamingImages || _nextCapture != null));
 
   CameraController? get controller => _controller;
 
@@ -152,12 +170,11 @@ class CameraGazeService {
     }
     final CameraDescription camera = cameras[choice.index];
 
-    _controller = await _initializeWithFallback(camera);
-    if (_controller == null) return; // onError already reported
-
     if (Platform.isWindows) {
-      await _startWindows();
+      await _startWindows(camera);
     } else {
+      _controller = await _initializeWithFallback(camera);
+      if (_controller == null) return; // onError already reported
       _faceDetector = FaceDetector(
         options: FaceDetectorOptions(
           enableClassification: true,
@@ -211,7 +228,7 @@ class CameraGazeService {
 
   // ── Windows ───────────────────────────────────────────────────────────────
 
-  Future<void> _startWindows() async {
+  Future<void> _startWindows(CameraDescription camera) async {
     try {
       final tflite.FaceDetector detector = tflite.FaceDetector();
       await detector.initialize(model: tflite.FaceDetectionModel.frontCamera);
@@ -221,6 +238,23 @@ class CameraGazeService {
       onError?.call('Face detection failed to initialise: $e');
       return;
     }
+
+    // In-memory capture is tried BEFORE any CameraController exists, and this
+    // ordering is load-bearing: a webcam is normally exclusive, so opening it
+    // through camera_windows first would leave Media Foundation unable to open
+    // it at all and the better path would silently never be used.
+    //
+    // When it succeeds there is deliberately no CameraController — that plugin
+    // is what writes JPEGs to disk, so the whole point is not to start it.
+    if (await _nativeCamera.start(preferredName: _cameraName)) {
+      _scheduleNextCapture(Duration.zero);
+      return;
+    }
+
+    // Fall back to the disk-based path rather than losing protection.
+    debugPrint('SafeScreen: falling back to takePicture capture');
+    _controller = await _initializeWithFallback(camera);
+    if (_controller == null) return; // onError already reported
     _scheduleNextCapture(Duration.zero);
   }
 
@@ -235,11 +269,11 @@ class CameraGazeService {
 
   Future<void> _captureAndDetectWindows() async {
     if (_stopping) return;
-    if (_controller == null ||
-        !_controller!.value.isInitialized ||
-        _tfliteDetector == null) {
-      return;
-    }
+    if (_tfliteDetector == null) return;
+    final bool haveSource =
+        _nativeCamera.isRunning ||
+        (_controller != null && _controller!.value.isInitialized);
+    if (!haveSource) return;
     if (_isProcessing) {
       _scheduleNextCapture(_currentInterval);
       return;
@@ -248,8 +282,15 @@ class CameraGazeService {
     _isProcessing = true;
     final bool wasVisible = gazeDetector.isScreenVisible;
     try {
-      final XFile file = await _controller!.takePicture();
-      final Uint8List? bytes = await _frameStore.takeAndShred(file.path);
+      // In-memory first; the disk path is the fallback, not the default.
+      Uint8List? bytes;
+      if (_nativeCamera.isRunning) {
+        bytes = await _nativeCamera.grabFrame();
+        _lastFrame = bytes;
+      } else {
+        final XFile file = await _controller!.takePicture();
+        bytes = await _frameStore.takeAndShred(file.path);
+      }
       if (bytes == null) {
         gazeDetector.observeError();
       } else {
@@ -427,6 +468,10 @@ class CameraGazeService {
     _nextCapture = null;
 
     try {
+      await _nativeCamera.stop();
+    } catch (_) {}
+
+    try {
       _tfliteDetector?.dispose();
     } catch (_) {}
     _tfliteDetector = null;
@@ -450,6 +495,7 @@ class CameraGazeService {
     _lastPose = null;
     _cameraName = null;
     _isVirtualCamera = false;
+    _lastFrame = null;
 
     // Last line of defence: destroy any capture file that outlived its read.
     await _frameStore.sweep();

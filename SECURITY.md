@@ -20,66 +20,59 @@ of your problems.
 
 **This is the most important thing to understand about how SafeScreen works.**
 
-The Windows camera plugin (`camera_windows`) has no image-streaming API. The
-only way to obtain a frame is `takePicture()`, and the plugin's native code
-writes that frame to disk before returning a path. Dart never gets a chance to
-intercept it.
+### The default: nothing is written to disk
 
-Upstream, that path is inside `FOLDERID_Pictures` — your Pictures library:
+SafeScreen captures through its own Media Foundation path,
+`windows/runner/mf_camera.cpp`. It opens the camera directly, reads each frame
+into memory, and passes it to Dart over a method channel. Frames are wrapped in
+a BMP container in memory (`lib/services/bmp_encoder.dart`) purely because the
+face detector's only entry point accepts an encoded image.
+
+**No file is created at any point.** There is nothing to sync, index, snapshot,
+back up or recover.
+
+This path is attempted before any `camera_windows` controller exists, and that
+ordering is load-bearing: a webcam is normally exclusive, so opening it through
+the plugin first would leave Media Foundation unable to open it and the better
+path would silently never be used.
+
+### The fallback, and why it still exists
+
+If in-memory capture cannot start — no Media Foundation, or a camera that will
+not produce RGB32 — SafeScreen falls back to the Flutter camera plugin rather
+than leaving you unprotected. **The status console reports which path is live:
+`Frames: In memory` or `Frames: Via disk (fallback)`.** The rest of this section
+applies only to the fallback.
+
+`camera_windows` has no image-streaming API. The only way to obtain a frame is
+`takePicture()`, whose native code writes it to disk before returning a path,
+and upstream that path is inside `FOLDERID_Pictures` — your Pictures library:
 
 ```cpp
 // camera_plugin.cpp, upstream
 SHGetKnownFolderPath(FOLDERID_Pictures, KF_FLAG_CREATE, nullptr, &known_folder_path);
 ```
 
-A gaze detector sampling several times a second would therefore write thousands
-of photographs of you into a folder that is Windows Search–indexed, thumbnailed
-by Explorer, and — on most consumer machines — **synced to OneDrive**, meaning
-uploaded off the device.
+A detector sampling several times a second would therefore write thousands of
+photographs of you into a folder that is Search-indexed, thumbnailed by
+Explorer, and on most consumer machines **synced to OneDrive**.
 
-### What SafeScreen does about it
+Two layers reduce that:
 
-Two independent layers:
-
-**1. Frames never go somewhere synced.** SafeScreen vendors a forked
-`camera_windows` whose only change is the capture destination: a private
-`%TEMP%\SafeScreenFrames` directory instead of the Pictures library. `%TEMP%` is
-not a sync target and is not part of the user's media libraries. The fork is a
-single function, documented in
+**1. Frames never go somewhere synced.** A forked `camera_windows` redirects
+captures to a private `%TEMP%\SafeScreenFrames` directory. The fork is a single
+function, documented in
 [`packages/camera_windows/FORK_NOTICE.md`](packages/camera_windows/FORK_NOTICE.md).
 
-**2. Frames do not survive being read.** `lib/services/secure_frame_store.dart`:
+**2. Frames do not survive being read.** `lib/services/secure_frame_store.dart`
+reads and destroys each file immediately, overwrites it with zeros first,
+destroys it even when decoding fails, tracks every path handed over, and sweeps
+survivors at shutdown. The status console shows a running count of erased files.
 
-| Mitigation | Effect |
-|---|---|
-| Read and destroy each file immediately | Lifetime is roughly the duration of one read |
-| Overwrite with zeros before unlinking | The JPEG is not left intact in free space |
-| Destroy the file even if decoding fails | A frame we could not use is still a photograph of you |
-| Track every path handed to us | Nothing is forgotten if a read throws |
-| Sweep on shutdown | Files that outlived a crashed capture are cleaned up |
-| Sample more slowly while already protected | Roughly halves files written while you are away |
-
-The status screen shows a live count of erased capture files, so this is
-observable rather than something you take on faith.
-
-### What is still not solved
-
-**Frames touch the disk.** Briefly, in a non-synced directory, overwritten and
-deleted immediately — but they touch it. Specifically:
-
-- On copy-on-write filesystems, wear-levelled SSDs, or volumes with VSS
-  snapshots, the zeroing pass may not overwrite the original blocks.
-- Anything running as your user could read `%TEMP%\SafeScreenFrames` during the
-  window a file exists. (Anything running as your user could also just open the
-  webcam directly, so this is not much of an escalation.)
-- A backup agent configured to include `%TEMP%` would capture frames. This is an
-  unusual configuration, but check yours if it matters.
-
-### The complete fix
-
-Replace `takePicture()` with a native Media Foundation capture path that
-delivers frames into memory and never touches the filesystem. This is the top
-roadmap item, and it would let the fork be dropped entirely.
+Residual risk on this path only: zeroing is best-effort on copy-on-write
+filesystems, wear-levelled SSDs and volumes with VSS snapshots; anything running
+as your user could read the directory during the moment a file exists; and a
+backup agent configured to include `%TEMP%` would capture frames.
 
 ---
 

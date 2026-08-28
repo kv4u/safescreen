@@ -530,10 +530,10 @@ footer .spacer { margin-left: auto; }
       </p>
 
       <pre class="ascii">
- webcam ──▶ <b>capture</b> ──▶ <b>shred file</b>          <span class="hi">◀── frame destroyed here,</span>
-                │                             <span class="hi">    before anything else</span>
-                ▼
-            <b>BlazeFace</b> ──▶ 6 keypoints ──▶ <b>head pose</b>
+ webcam ──▶ <b>Media Foundation</b> ──▶ <b>BMP in memory</b>   <span class="hi">◀── no file is ever</span>
+                  │                                <span class="hi">    created</span>
+                  ▼
+             <b>BlazeFace</b> ──▶ 6 keypoints ──▶ <b>head pose</b>
                                               yaw · roll · pitch
                                                     │
                                                     ▼
@@ -594,27 +594,28 @@ footer .spacer { margin-left: auto; }
       </p>
 
       <div class="notice">
-        <h3>They touch the disk. Briefly. Here is exactly how.</h3>
+        <h3>They never touch the disk. Here is how.</h3>
         <p>
-          The Windows camera plugin has no streaming API — the only way to get a
-          frame is to take a photograph, and it writes that photograph to disk
-          before any of SafeScreen's own code can see it. By default the
-          destination is your <kbd>Pictures</kbd> folder, which on most machines
-          syncs to OneDrive. A detector sampling several times a second would
-          therefore upload thousands of photographs of your face.
+          SafeScreen captures through its own Media Foundation path, reading each
+          frame straight into memory and handing it to the detector there. No file
+          is created at any point &mdash; nothing to sync, index, snapshot, back up
+          or recover.
         </p>
         <p>
-          So SafeScreen ships a forked plugin whose single change redirects
-          captures to <kbd>%TEMP%\SafeScreenFrames</kbd> — not a sync target —
-          then overwrites each file with zeros and deletes it the instant it has
-          been read, on every code path, sweeping any survivors at shutdown.
+          That matters because the obvious way to do this on Windows is the wrong
+          one. The Flutter camera plugin has no streaming API: its only way to
+          produce a frame is to encode a JPEG to disk first, and by default that
+          lands in your <kbd>Pictures</kbd> folder &mdash; Search-indexed,
+          thumbnailed, and on most machines synced to OneDrive. A detector sampling
+          several times a second would upload thousands of photographs of you.
         </p>
         <p>
-          Frames stay on your machine and do not outlive their read. But they
-          <i>are</i> written, and zeroing is best-effort on copy-on-write
-          filesystems and wear-levelled SSDs. Removing disk writes altogether
-          needs a native capture path, which is the top item on the roadmap.
-          <a href="https://github.com/kv4u/safescreen/blob/main/SECURITY.md#how-camera-frames-are-handled">Full detail in SECURITY.md →</a>
+          That plugin is kept only as a fallback, for machines where in-memory
+          capture will not start, because losing protection entirely would be
+          worse. There it writes to private temp storage instead of Pictures, and
+          each file is overwritten and deleted the instant it has been read. The
+          status console tells you which path is running.
+          <a href="https://github.com/kv4u/safescreen/blob/main/SECURITY.md#how-camera-frames-are-handled">Full detail in SECURITY.md &rarr;</a>
         </p>
       </div>
     </div>
