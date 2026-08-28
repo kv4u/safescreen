@@ -129,6 +129,7 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
   String? _cameraName;
 
   bool _cameraIsVirtual = false;
+  bool _showCameraPreview = SettingsService.instance.showCameraPreview;
 
   String get _cameraLabel => _cameraName ?? 'Detected';
 
@@ -571,6 +572,37 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
                 onChanged: (bool v) {
                   setState(() => _detectShoulderSurfers = v);
                   SettingsService.instance.setDetectShoulderSurfers(v);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: S.x3),
+          const Rule(faint: true),
+          const SizedBox(height: S.x3),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('CAMERA PREVIEW', style: T.label),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Show the live image while protecting. Detection is '
+                      'unaffected either way.',
+                      style: T.body.copyWith(fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _showCameraPreview,
+                activeColor: C.signal,
+                inactiveThumbColor: C.inkMuted,
+                inactiveTrackColor: C.ruleFaint,
+                onChanged: (bool v) {
+                  setState(() => _showCameraPreview = v);
+                  SettingsService.instance.setShowCameraPreview(v);
                 },
               ),
             ],

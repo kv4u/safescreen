@@ -117,6 +117,7 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 |---|---|---|
 | Sensitivity | Strict | Angular tolerance (±40° lenient → ±15° strict) and how many frames each transition needs |
 | Shoulder-surfer detection | On | Protect when a second face appears |
+| Camera preview | On | Show the live image in the status console. Detection is unaffected |
 
 ## Known limitations
 

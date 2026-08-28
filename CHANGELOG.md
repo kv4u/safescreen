@@ -25,6 +25,10 @@ First public release. Windows is the supported platform.
   eyes closed, multiple faces, detector error, stale feed.
 - **Capture-file accounting** shown live in the status card, so the erasure
   described in SECURITY.md is observable.
+- **Camera preview toggle.** The status console showed a live image of the user
+  with no way to turn it off, which is a questionable default for a tool that
+  sits on screen all day. Detection is unaffected either way — the setting only
+  controls whether the video is drawn.
 - **Persisted settings** via `shared_preferences`.
 - Unit test suite covering the pose estimator and the detection state machine.
 - CI running `flutter analyze` and `flutter test`; tagged releases built by

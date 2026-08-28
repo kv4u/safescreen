@@ -417,9 +417,13 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
     // not starting one is the point -- so the preview renders the same frames
     // the detector is looking at.
     final Uint8List? nativeFrame = _cameraGazeService.lastFrameBytes;
+    // Read live rather than caching at initState, so toggling the setting takes
+    // effect without restarting protection.
+    final bool wantPreview = SettingsService.instance.showCameraPreview;
     final bool hasPreview =
-        (controller != null && controller.value.isInitialized) ||
-        nativeFrame != null;
+        wantPreview &&
+        ((controller != null && controller.value.isInitialized) ||
+            nativeFrame != null);
     final Color tone = isVisible ? C.clear : C.signal;
     final HeadPose? pose = _cameraGazeService.lastPose;
     final int failures = _cameraGazeService.shredFailures;
