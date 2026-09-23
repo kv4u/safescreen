@@ -118,6 +118,7 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 | Sensitivity | Strict | Angular tolerance (±40° lenient → ±15° strict) and how many frames each transition needs |
 | Shoulder-surfer detection | On | Protect when a second face appears |
 | Camera preview | On | Show the live image in the status console. Detection is unaffected |
+| Start with Windows | Off | Launch into the tray at sign-in and begin protecting straight away |
 
 ## Known limitations
 
@@ -146,8 +147,7 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 ## Roadmap
 
 1. Optional session lock after a configurable absence.
-2. Start-with-Windows option.
-3. Signed binaries, if funding for a certificate ever appears.
+2. Signed binaries, if funding for a certificate ever appears.
 
 ## Building from source
 

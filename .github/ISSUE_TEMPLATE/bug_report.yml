@@ -1,0 +1,117 @@
+name: Bug report
+description: SafeScreen did something wrong, or failed to protect the screen.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The fields below are the ones that have actually
+        mattered in past bugs — most real problems so far turned out to depend
+        on the camera or on software processing its video, not on the code
+        path that looked responsible.
+
+        **If this is a way to defeat the protection or leak camera frames,
+        please report it privately instead:**
+        https://github.com/kv4u/safescreen/security/advisories/new
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: exposure
+    attributes:
+      label: Was the screen left visible when it should have been hidden?
+      description: >
+        This is the failure that matters most, so it is asked separately.
+        "Hidden when it should have been visible" is annoying; the reverse
+        is a privacy failure.
+      options:
+        - "No"
+        - "Yes — the screen stayed visible when it should have gone dark"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: SafeScreen version
+      placeholder: v1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frames
+    attributes:
+      label: What does the FRAMES row on the status console say?
+      description: Start protection and read the spec table.
+      options:
+        - In memory
+        - Via disk (fallback)
+        - Never got that far — it failed before protection started
+    validations:
+      required: true
+
+  - type: input
+    id: camera
+    attributes:
+      label: Camera
+      description: The CAMERA row on the home screen, e.g. "Integrated Webcam".
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: effects
+    attributes:
+      label: Is anything processing the camera?
+      description: >
+        Background blur and similar effects can remove a person from the frame
+        before SafeScreen ever sees it. Tick anything that is running.
+      options:
+        - label: NVIDIA Broadcast
+        - label: Windows Studio Effects (Copilot+ PCs — Settings → Bluetooth & devices → Cameras)
+        - label: OBS Virtual Camera, XSplit, Snap Camera, or another virtual camera
+        - label: Teams / Zoom / Meet background effects
+        - label: None that I know of
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Run `winver`.
+      placeholder: Windows 11 24H2 (build 26100)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: displays
+    attributes:
+      label: Displays
+      options:
+        - One
+        - Several, all at the same scaling
+        - Several, at different scaling (e.g. laptop at 150% plus a monitor at 100%)
+    validations:
+      required: true
+
+  - type: textarea
+    id: reason
+    attributes:
+      label: What did the status console say at the time?
+      description: >
+        The line under VISIBLE / PROTECTED — "Looking away", "No one detected",
+        "Detector unavailable" and so on. Also the YAW and ROLL values if the
+        problem is detection being too eager or too slow.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: >
+        Screenshots are welcome, but please turn Camera preview off in
+        Detection settings first so the image does not include your face.

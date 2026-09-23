@@ -1,11 +1,12 @@
 // Camera + face detection pipeline.
 //
-// Windows (the supported target): there is no image-stream API in
-// `camera_windows`, so frames come from a self-scheduling `takePicture` loop.
-// Each frame is destroyed immediately — see `secure_frame_store.dart` for why
-// that matters. Detection runs in `FaceDetectionMode.fast`, which yields the
-// bounding box plus six keypoints; those keypoints are converted to real head
-// pose by `head_pose_estimator.dart`.
+// Windows (the supported target): frames come from SafeScreen's own Media
+// Foundation path (`native_camera.dart`, `windows/runner/mf_camera.cpp`) and
+// never touch the disk. If that cannot start, a self-scheduling `takePicture`
+// loop takes over, with each file destroyed immediately by
+// `secure_frame_store.dart`. Detection runs in `FaceDetectionMode.fast`, which
+// yields the bounding box plus six keypoints; those keypoints are converted to
+// real head pose by `head_pose_estimator.dart`.
 //
 // Android (experimental): live image stream into ML Kit, which reports Euler
 // angles and eye-open probabilities directly.
@@ -103,6 +104,12 @@ class CameraGazeService {
   bool get isInMemoryCapture => _nativeCamera.isRunning;
 
   Uint8List? _lastFrame;
+
+  /// Whether to hold on to the latest frame so the status console can draw it.
+  ///
+  /// Off means no frame outlives the detection call that used it, which is
+  /// what PRIVACY.md promises when the camera preview is turned off.
+  bool keepPreviewFrame = true;
 
   /// The most recent frame, as an encoded image. Only populated on the
   /// in-memory path, where there is no CameraController to preview from.
@@ -286,7 +293,7 @@ class CameraGazeService {
       Uint8List? bytes;
       if (_nativeCamera.isRunning) {
         bytes = await _nativeCamera.grabFrame();
-        _lastFrame = bytes;
+        _lastFrame = keepPreviewFrame ? bytes : null;
       } else {
         final XFile file = await _controller!.takePicture();
         bytes = await _frameStore.takeAndShred(file.path);

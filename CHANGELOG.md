@@ -4,6 +4,32 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Start with Windows.** A tray utility that has to be launched by hand after
+  every reboot protects nobody on the mornings it is forgotten, and nothing says
+  it is not running. Opt-in, off by default. It registers under the per-user Run
+  key, launches straight into the tray and starts protecting. Because SafeScreen
+  is an unzip-anywhere folder, the entry is checked on every launch and rewritten
+  if the app has moved; otherwise a moved folder would leave autostart silently
+  broken.
+- **Camera preview toggle.** The status console showed a live image of the user
+  with no way to turn it off, which is a questionable default for a tool that
+  sits on screen all day. Detection is unaffected either way — the setting only
+  controls whether the video is drawn.
+- **Bug report form** asking for the details that have actually mattered in past
+  bugs: capture path, camera, any video effects, display scaling, and — asked
+  separately — whether the screen was left visible when it should have hidden.
+
+### Fixed
+
+- **The panel no longer pops up after every look-away when minimised to the
+  tray.** When the blackout lifted, the window returned to panel size, centred
+  and always-on-top, regardless of where it had been. It now goes back to the
+  tray if that is where it was.
+
 ## [1.0.0] — 2026-08-13
 
 First public release. Windows is the supported platform.
@@ -25,10 +51,6 @@ First public release. Windows is the supported platform.
   eyes closed, multiple faces, detector error, stale feed.
 - **Capture-file accounting** shown live in the status card, so the erasure
   described in SECURITY.md is observable.
-- **Camera preview toggle.** The status console showed a live image of the user
-  with no way to turn it off, which is a questionable default for a tool that
-  sits on screen all day. Detection is unaffected either way — the setting only
-  controls whether the video is drawn.
 - **Persisted settings** via `shared_preferences`.
 - Unit test suite covering the pose estimator and the detection state machine.
 - CI running `flutter analyze` and `flutter test`; tagged releases built by
@@ -112,4 +134,5 @@ First public release. Windows is the supported platform.
   [SECURITY.md](SECURITY.md#camera-effects).
 - Android support is experimental and unsupported.
 
+[Unreleased]: https://github.com/kv4u/safescreen/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/kv4u/safescreen/releases/tag/v1.0.0

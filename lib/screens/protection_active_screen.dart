@@ -37,6 +37,10 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
 
   // Windows overlay state
   bool _overlayActive = false;
+
+  /// Whether the window was in the tray when the blackout took over, so it
+  /// can go back there afterwards instead of popping up mid-screen.
+  bool _hiddenBeforeBlackout = false;
   Timer? _windowDebounce;
 
   /// Serialises window_manager transitions. Without this, two overlapping
@@ -79,6 +83,9 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
         if (Platform.isWindows) _applyWindowMode();
       },
     );
+    // Settings cannot change while this screen is up -- it covers the home
+    // screen that holds them -- so reading once here is enough.
+    _cameraGazeService.keepPreviewFrame = settings.showCameraPreview;
     if (Platform.isWindows) {
       windowManager.addListener(this);
       _initWindowsMode();
@@ -238,6 +245,7 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
       final bool wantBlackout = _blackoutWanted;
       if (wantBlackout && !_overlayActive) {
         _overlayActive = true;
+        _hiddenBeforeBlackout = !(await windowManager.isVisible());
         await windowManager.show();
         await _coverAllDisplays();
         await windowManager.setAlwaysOnTop(true);
@@ -248,6 +256,13 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
         await windowManager.setAlwaysOnTop(true);
         await windowManager.setSize(W.panel);
         await windowManager.center();
+        // Previously the panel stayed on screen, centred and always-on-top,
+        // after every look-away -- even for someone who had minimised it to
+        // the tray. Return it to wherever it was.
+        if (_hiddenBeforeBlackout) {
+          _hiddenBeforeBlackout = false;
+          await windowManager.hide();
+        }
       }
     });
   }

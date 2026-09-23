@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'screens/privacy_screen.dart';
 import 'screens/protection_active_screen.dart';
+import 'services/autostart.dart';
 import 'services/camera_selection.dart';
 import 'services/settings_service.dart';
 import 'theme/tokens.dart';
@@ -19,8 +20,10 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 // Entry points
 // ---------------------------------------------------------------------------
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Present when Windows started us at sign-in via the Run key.
+  final bool launchedAtSignIn = args.contains(kAutostartFlag);
   await SettingsService.instance.load();
 
   if (Platform.isWindows) {
@@ -42,14 +45,22 @@ void main() async {
         windowButtonVisibility: false,
       ),
       () async {
+        // At sign-in, start straight into the tray. Popping a window up in
+        // the middle of someone's desktop every login is exactly how a
+        // utility like this gets uninstalled.
+        if (launchedAtSignIn) return;
         await windowManager.show();
         await windowManager.focus();
       },
     );
     await windowManager.setPreventClose(false);
+
+    // SafeScreen is an unzip-anywhere folder; if it was moved since autostart
+    // was enabled, point the Run entry at the new location.
+    await AutostartService().repairIfMoved();
   }
 
-  runApp(const SafeScreenApp());
+  runApp(SafeScreenApp(launchedAtSignIn: launchedAtSignIn));
 }
 
 class _WindowsTrayListener extends WindowListener {
@@ -70,7 +81,9 @@ void overlayMain() {
 // ---------------------------------------------------------------------------
 
 class SafeScreenApp extends StatelessWidget {
-  const SafeScreenApp({super.key});
+  const SafeScreenApp({super.key, this.launchedAtSignIn = false});
+
+  final bool launchedAtSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +112,7 @@ class SafeScreenApp extends StatelessWidget {
           child: child!,
         );
       },
-      home: const SafeScreenHome(),
+      home: SafeScreenHome(launchedAtSignIn: launchedAtSignIn),
     );
   }
 }
@@ -109,7 +122,10 @@ class SafeScreenApp extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class SafeScreenHome extends StatefulWidget {
-  const SafeScreenHome({super.key});
+  const SafeScreenHome({super.key, this.launchedAtSignIn = false});
+
+  /// When true, go straight into protection once the camera checks out.
+  final bool launchedAtSignIn;
 
   @override
   State<SafeScreenHome> createState() => _SafeScreenHomeState();
@@ -130,8 +146,23 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
 
   bool _cameraIsVirtual = false;
   bool _showCameraPreview = SettingsService.instance.showCameraPreview;
+  bool _startWithWindows = false;
+  bool _autostartHandled = false;
+  final AutostartService _autostart = AutostartService();
 
   String get _cameraLabel => _cameraName ?? 'Detected';
+
+  /// Reads the autostart state from the registry.
+  ///
+  /// Done when the settings panel opens rather than at start-up: the registry,
+  /// not a stored preference, is the source of truth -- the entry can be
+  /// removed from Task Manager's Startup tab without SafeScreen knowing -- but
+  /// there is no reason to spawn reg.exe on every launch to draw a toggle that
+  /// is usually collapsed.
+  Future<void> _refreshAutostart() async {
+    final bool on = await _autostart.isEnabled();
+    if (mounted) setState(() => _startWithWindows = on);
+  }
 
   @override
   void initState() {
@@ -256,6 +287,10 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
           _cameraName = name.isEmpty ? null : name;
           _cameraIsVirtual = choice?.isVirtual ?? false;
         });
+        if (widget.launchedAtSignIn && !_autostartHandled) {
+          _autostartHandled = true;
+          _goToProtection();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -489,7 +524,10 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InkWell(
-          onTap: () => setState(() => _showSettings = !_showSettings),
+          onTap: () {
+            setState(() => _showSettings = !_showSettings);
+            if (_showSettings) _refreshAutostart();
+          },
           hoverColor: C.paperSunken,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: S.x2),
@@ -607,6 +645,51 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
               ),
             ],
           ),
+          if (Platform.isWindows) ...[
+            const SizedBox(height: S.x3),
+            const Rule(faint: true),
+            const SizedBox(height: S.x3),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('START WITH WINDOWS', style: T.label),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Begins protecting when you sign in, from the tray.',
+                        style: T.body.copyWith(fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _startWithWindows,
+                  activeColor: C.signal,
+                  inactiveThumbColor: C.inkMuted,
+                  inactiveTrackColor: C.ruleFaint,
+                  onChanged: (bool v) async {
+                    final ScaffoldMessengerState messenger =
+                        ScaffoldMessenger.of(context);
+                    setState(() => _startWithWindows = v);
+                    final bool ok = await _autostart.setEnabled(v);
+                    if (!mounted) return;
+                    // Show what the registry actually says, not what was asked
+                    // for, so a failed write cannot leave a false "on".
+                    await _refreshAutostart();
+                    if (!ok) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not change the startup entry.'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
         ],
       ],
     );
