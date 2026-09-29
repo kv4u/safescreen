@@ -13,6 +13,7 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../services/app_exit.dart';
 import '../services/camera_gaze_service.dart';
 import '../services/display_geometry.dart';
 import '../services/gaze_detector_service.dart';
@@ -361,7 +362,7 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
                               : (isVisible ? C.clear : C.signal)),
                   onBack: _stopProtection,
                   onMinimise: () => windowManager.hide(),
-                  onClose: () => windowManager.close(),
+                  onClose: exitSafeScreen,
                 ),
               Expanded(
                 child: SafeArea(

@@ -7,6 +7,7 @@ import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import '../services/app_exit.dart';
 import '../services/camera_gaze_service.dart';
 import '../services/gaze_detector_service.dart';
 import '../services/settings_service.dart';
@@ -173,7 +174,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
         IconButton(
           icon: const Icon(Icons.close_rounded, size: 18),
           tooltip: 'Close',
-          onPressed: () => windowManager.close(),
+          onPressed: exitSafeScreen,
           color: _textMuted,
         ),
         const SizedBox(width: 4),

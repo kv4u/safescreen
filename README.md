@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icon.png" width="96" alt="SafeScreen icon">
+
 # SafeScreen
 
 **Your screen goes dark when you look away.**

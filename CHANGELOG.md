@@ -23,8 +23,26 @@ All notable changes to this project are documented here. Format follows
   bugs: capture path, camera, any video effects, display scaling, and — asked
   separately — whether the screen was left visible when it should have hidden.
 
+- **A proper icon.** The app, taskbar and tray all showed the default Flutter
+  logo. The new mark is a monitor whose screen has gone dark, with the camera
+  light lit, in the app's own palette. It is drawn per size on a pixel grid so
+  it stays sharp at 16 px in the tray, and checked against both light and dark
+  taskbars. Regenerate with `python tool/generate_icons.py`.
+
+### Changed
+
+- **Camera frames are read on a dedicated thread.** Each read waits for the
+  sensor's next frame, and doing that on the UI thread froze the window briefly
+  several times a second. Frames are just as fresh and there is no extra CPU
+  cost.
+
 ### Fixed
 
+- **The tray menu works.** Right-clicking the tray icon did nothing, because on
+  Windows the app has to open the menu itself and never did. So a SafeScreen
+  hidden in the tray could not be quit without Task Manager. Every exit path now
+  goes through one routine, which also removes the tray icon rather than leaving
+  a dead one behind.
 - **The panel no longer pops up after every look-away when minimised to the
   tray.** When the blackout lifted, the window returned to panel size, centred
   and always-on-top, regardless of where it had been. It now goes back to the

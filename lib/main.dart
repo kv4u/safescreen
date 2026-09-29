@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'screens/privacy_screen.dart';
 import 'screens/protection_active_screen.dart';
+import 'services/app_exit.dart';
 import 'services/autostart.dart';
 import 'services/camera_selection.dart';
 import 'services/settings_service.dart';
@@ -204,7 +205,7 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
             tray.MenuItem(key: 'show', label: 'Show SafeScreen'),
             tray.MenuItem(key: 'hide', label: 'Hide to tray'),
             tray.MenuItem.separator(),
-            tray.MenuItem(key: 'exit', label: 'Exit'),
+            tray.MenuItem(key: 'exit', label: 'Exit SafeScreen'),
           ],
         ),
       );
@@ -219,6 +220,14 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
     windowManager.focus();
   }
 
+  /// Windows does not open a tray icon's menu by itself -- tray_manager leaves
+  /// that to the app. Without this, right-clicking the icon did nothing, and a
+  /// SafeScreen hidden in the tray could not be quit at all.
+  @override
+  void onTrayIconRightMouseDown() {
+    tray.trayManager.popUpContextMenu();
+  }
+
   @override
   void onTrayMenuItemClick(tray.MenuItem item) {
     switch (item.key) {
@@ -228,7 +237,7 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
       case 'hide':
         windowManager.hide();
       case 'exit':
-        windowManager.close();
+        exitSafeScreen();
     }
   }
 
@@ -358,7 +367,7 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
             TitleStrip(
               title: 'SafeScreen',
               onMinimise: () => windowManager.hide(),
-              onClose: () => windowManager.close(),
+              onClose: exitSafeScreen,
             ),
           // Expanded + scroll view: the panel is laid out to fit its natural
           // window size, and degrades to scrolling rather than overflowing
