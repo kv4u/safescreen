@@ -281,8 +281,8 @@ class _SafeScreenHomeState extends State<SafeScreenHome>
       final CameraChoice? choice = chooseCamera(
         cameras
             .map(
-              (CameraDescription c) => CameraOption(
-                name: c.name,
+              (CameraDescription c) => CameraOption.fromRaw(
+                c.name,
                 isFront: c.lensDirection == CameraLensDirection.front,
               ),
             )

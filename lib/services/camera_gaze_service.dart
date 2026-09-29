@@ -82,6 +82,7 @@ class CameraGazeService {
   ResolutionPreset? get activeResolution => _activeResolution;
 
   String? _cameraName;
+  String? _cameraDeviceId;
   bool _isVirtualCamera = false;
 
   /// Name of the camera actually in use.
@@ -156,8 +157,8 @@ class CameraGazeService {
     final CameraChoice? choice = chooseCamera(
       cameras
           .map(
-            (CameraDescription c) => CameraOption(
-              name: c.name,
+            (CameraDescription c) => CameraOption.fromRaw(
+              c.name,
               isFront: c.lensDirection == CameraLensDirection.front,
             ),
           )
@@ -168,6 +169,7 @@ class CameraGazeService {
       return;
     }
     _cameraName = choice.option.name;
+    _cameraDeviceId = choice.option.deviceId;
     _isVirtualCamera = choice.isVirtual;
     if (choice.isVirtual) {
       debugPrint(
@@ -253,7 +255,13 @@ class CameraGazeService {
     //
     // When it succeeds there is deliberately no CameraController — that plugin
     // is what writes JPEGs to disk, so the whole point is not to start it.
-    if (await _nativeCamera.start(preferredName: _cameraName)) {
+    // Open the exact camera chooseCamera picked, by device path. Matching on
+    // names alone could land on a different device -- including the virtual
+    // camera that choice was made to avoid.
+    if (await _nativeCamera.start(
+      deviceId: _cameraDeviceId,
+      preferredName: _cameraName,
+    )) {
       _scheduleNextCapture(Duration.zero);
       return;
     }
@@ -501,6 +509,7 @@ class CameraGazeService {
     _activeResolution = null;
     _lastPose = null;
     _cameraName = null;
+    _cameraDeviceId = null;
     _isVirtualCamera = false;
     _lastFrame = null;
 

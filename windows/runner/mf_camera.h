@@ -28,7 +28,8 @@ constexpr UINT kMfCameraDoneMessage = WM_APP + 0x5C;
 // platform thread.
 //
 // Methods:
-//   start(deviceName: String?) -> {width: int, height: int, device: String}
+//   start(deviceId: String?, deviceName: String?)
+//                              -> {width: int, height: int, device: String}
 //   grab()                     -> {bytes: Uint8List, width, height, stride}
 //   stop()                     -> null
 void RegisterMfCameraChannel(flutter::BinaryMessenger* messenger, HWND window);

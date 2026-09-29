@@ -24,12 +24,65 @@
 // processing inside the OS camera pipeline on Copilot+ hardware. That affects
 // the physical device itself and is invisible from here — see SECURITY.md.
 
+/// A camera name as the Windows camera plugin reports it, split into parts.
+///
+/// The plugin reports `Friendly Name <device path>`, for example
+/// `Integrated Webcam <\\?\usb#vid_0c45&pid_6a10&mi_00#...\global>`. The
+/// device path is the camera's exact identity; the friendly name is what a
+/// person should see. Showing the raw string put the device path on screen as
+/// gibberish.
+class CameraName {
+  const CameraName({required this.display, this.deviceId});
+
+  /// Human-readable name, for the UI and for the virtual-camera check.
+  final String display;
+
+  /// Exact device path, for opening this specific camera. Null when the
+  /// platform reported only a plain name.
+  final String? deviceId;
+
+  @override
+  String toString() => 'CameraName($display, $deviceId)';
+}
+
+/// Splits a raw camera name into its display name and device path.
+CameraName parseCameraName(String raw) {
+  final String trimmed = raw.trim();
+  final int open = trimmed.lastIndexOf('<');
+  if (open <= 0 || !trimmed.endsWith('>')) {
+    return CameraName(display: trimmed);
+  }
+  final String display = trimmed.substring(0, open).trim();
+  final String id = trimmed.substring(open + 1, trimmed.length - 1).trim();
+  if (display.isEmpty) return CameraName(display: trimmed);
+  return CameraName(display: display, deviceId: id.isEmpty ? null : id);
+}
+
 /// A camera as the platform enumerated it.
 class CameraOption {
-  const CameraOption({required this.name, required this.isFront});
+  const CameraOption({
+    required this.name,
+    required this.isFront,
+    this.deviceId,
+  });
 
+  /// Builds an option from the plugin's raw `Friendly Name <device path>`.
+  factory CameraOption.fromRaw(String raw, {required bool isFront}) {
+    final CameraName parsed = parseCameraName(raw);
+    return CameraOption(
+      name: parsed.display,
+      isFront: isFront,
+      deviceId: parsed.deviceId,
+    );
+  }
+
+  /// Human-readable name. The virtual-camera check runs on this alone, so a
+  /// marker that happens to appear inside a device path cannot misfire.
   final String name;
   final bool isFront;
+
+  /// Exact device path, when known.
+  final String? deviceId;
 
   @override
   String toString() => 'CameraOption($name, front: $isFront)';

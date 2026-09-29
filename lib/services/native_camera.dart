@@ -35,16 +35,22 @@ class NativeCameraCapture {
   int get width => _width;
   int get height => _height;
 
-  /// Opens the camera, preferring one whose name contains [preferredName].
+  /// Opens the camera identified by [deviceId] (its exact device path), or by
+  /// [preferredName] when no device path is known.
+  ///
+  /// If a camera was asked for and cannot be found, this fails rather than
+  /// opening a different one: the caller then falls back to the plugin path,
+  /// which opens the camera that was actually chosen.
   ///
   /// Returns false rather than throwing when in-memory capture is unavailable,
   /// so the caller can fall back without special-casing errors.
-  Future<bool> start({String? preferredName}) async {
+  Future<bool> start({String? deviceId, String? preferredName}) async {
     if (!Platform.isWindows) return false;
     if (_running) return true;
 
     try {
       final Object? reply = await _channel.invokeMethod<Object?>('start', {
+        if (deviceId != null) 'deviceId': deviceId,
         if (preferredName != null) 'deviceName': preferredName,
       });
       if (reply is! Map) return false;

@@ -38,6 +38,17 @@ All notable changes to this project are documented here. Format follows
 
 ### Fixed
 
+- **Camera names are readable, and the in-memory path opens the right
+  camera.** The Windows camera plugin names each device `Friendly Name <device
+  path>`, and the device path was being shown on screen as gibberish. Worse, the
+  in-memory capture path was handed that whole string and looked for a camera
+  whose friendly name contained it, which never matched, so it silently opened
+  whichever camera Windows listed first. On a machine where that is NVIDIA
+  Broadcast, the virtual-camera avoidance was bypassed. The name is now split:
+  the friendly part is shown, the virtual-camera check runs on the friendly part
+  only, and the camera is opened by its exact device path. If that device cannot
+  be found, the in-memory path refuses rather than opening a different one, and
+  the plugin fallback opens the chosen camera instead.
 - **The tray menu works.** Right-clicking the tray icon did nothing, because on
   Windows the app has to open the menu itself and never did. So a SafeScreen
   hidden in the tray could not be quit without Task Manager. Every exit path now

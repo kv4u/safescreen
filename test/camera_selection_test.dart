@@ -5,6 +5,78 @@ CameraOption cam(String name, {bool front = true}) =>
     CameraOption(name: name, isFront: front);
 
 void main() {
+  group('parseCameraName', () {
+    test('splits the plugin name into display name and device path', () {
+      final CameraName n = parseCameraName(
+        r'Integrated Webcam <\?\usb#vid_0c45&pid_6a10&mi_00#6&2a1f#{e5323777-f976-4f5b-9b55-b94699c46e44}\global>',
+      );
+
+      expect(n.display, 'Integrated Webcam');
+      expect(
+        n.deviceId,
+        r'\?\usb#vid_0c45&pid_6a10&mi_00#6&2a1f#{e5323777-f976-4f5b-9b55-b94699c46e44}\global',
+      );
+    });
+
+    test('a plain name is left alone', () {
+      final CameraName n = parseCameraName('HD Pro Webcam C920');
+
+      expect(n.display, 'HD Pro Webcam C920');
+      expect(n.deviceId, isNull);
+    });
+
+    test('a name that is only a bracketed path is not emptied', () {
+      expect(parseCameraName(r'<\?\usb#x>').display, r'<\?\usb#x>');
+    });
+
+    test('surrounding whitespace is trimmed', () {
+      final CameraName n = parseCameraName('  Surface Camera Front <id-1>  ');
+
+      expect(n.display, 'Surface Camera Front');
+      expect(n.deviceId, 'id-1');
+    });
+  });
+
+  group('CameraOption.fromRaw', () {
+    test('keeps the device path for opening the exact camera', () {
+      final CameraOption o = CameraOption.fromRaw(
+        r'Logitech BRIO <\?\usb#vid_046d&pid_085e#abc\global>',
+        isFront: true,
+      );
+
+      expect(o.name, 'Logitech BRIO');
+      expect(o.deviceId, r'\?\usb#vid_046d&pid_085e#abc\global');
+    });
+
+    test('the virtual-camera check sees only the display name', () {
+      // A marker inside the device path must not flag a real webcam.
+      final CameraChoice? c = chooseCamera(<CameraOption>[
+        CameraOption.fromRaw(
+          r'Integrated Webcam <\?\root#vcam_driver#0000\global>',
+          isFront: true,
+        ),
+      ]);
+
+      expect(c!.isVirtual, isFalse);
+    });
+
+    test('a virtual camera is still recognised by its display name', () {
+      final CameraChoice? c = chooseCamera(<CameraOption>[
+        CameraOption.fromRaw(
+          r'NVIDIA Broadcast <\?\root#nvbroadcast#0000\global>',
+          isFront: true,
+        ),
+        CameraOption.fromRaw(
+          r'Integrated Webcam <\?\usb#vid_0c45#1\global>',
+          isFront: true,
+        ),
+      ]);
+
+      expect(c!.option.name, 'Integrated Webcam');
+      expect(c.option.deviceId, r'\?\usb#vid_0c45#1\global');
+    });
+  });
+
   group('looksLikeVirtualCamera', () {
     test('recognises the common effects and virtual camera software', () {
       for (final String name in <String>[

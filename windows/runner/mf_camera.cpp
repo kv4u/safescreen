@@ -12,6 +12,7 @@
 #include <shlwapi.h>
 #include <wrl/client.h>
 
+#include <cctype>
 #include <condition_variable>
 #include <deque>
 #include <memory>
@@ -35,6 +36,31 @@ std::string Utf8FromWide(const wchar_t* wide, int wide_len) {
   return out;
 }
 
+// Case-insensitive comparison, for device paths whose letter case is not
+// guaranteed to match between enumerations.
+bool EqualsIgnoreCase(const std::string& a, const std::string& b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); i++) {
+    if (std::tolower(static_cast<unsigned char>(a[i])) !=
+        std::tolower(static_cast<unsigned char>(b[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Reads a string attribute from a device activation object as UTF-8.
+std::string DeviceString(IMFActivate* device, const GUID& key) {
+  wchar_t* value = nullptr;
+  UINT32 len = 0;
+  if (FAILED(device->GetAllocatedString(key, &value, &len))) {
+    return std::string();
+  }
+  std::string utf8 = Utf8FromWide(value, static_cast<int>(len));
+  CoTaskMemFree(value);
+  return utf8;
+}
+
 // Owns the Media Foundation reader for one camera.
 //
 // Used only from the capture thread (see CaptureWorker below). ReadSample
@@ -46,9 +72,15 @@ class MfCamera {
  public:
   ~MfCamera() { Stop(); }
 
-  // Opens the first camera whose friendly name contains |preferred_name|, or
-  // simply the first camera when that is empty.
-  bool Start(const std::string& preferred_name, std::string* device_out,
+  // Opens the camera whose device path is |device_id|, or failing that whose
+  // friendly name is |preferred_name|. With neither given, opens the first.
+  //
+  // If a camera was asked for and is not found, this fails rather than opening
+  // another one. Silently opening "the first camera" could hand the detector a
+  // virtual camera -- exactly what the Dart side chose to avoid -- and the
+  // caller's fallback opens the right device instead.
+  bool Start(const std::string& device_id, const std::string& preferred_name,
+             std::string* device_out,
              int* width_out, int* height_out, std::string* error_out) {
     Stop();
 
@@ -77,24 +109,37 @@ class MfCamera {
       return false;
     }
 
-    UINT32 chosen = 0;
-    std::string chosen_name;
+    const bool wants_specific = !device_id.empty() || !preferred_name.empty();
+    int by_id = -1;
+    int by_name = -1;
+    std::vector<std::string> names(count);
     for (UINT32 i = 0; i < count; i++) {
-      wchar_t* name = nullptr;
-      UINT32 name_len = 0;
-      if (SUCCEEDED(devices[i]->GetAllocatedString(
-              MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &name, &name_len))) {
-        std::string utf8 = Utf8FromWide(name, static_cast<int>(name_len));
-        CoTaskMemFree(name);
-        if (i == 0) chosen_name = utf8;
-        if (!preferred_name.empty() &&
-            utf8.find(preferred_name) != std::string::npos) {
-          chosen = i;
-          chosen_name = utf8;
-          break;
-        }
+      names[i] = DeviceString(devices[i], MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME);
+      if (by_id < 0 && !device_id.empty() &&
+          EqualsIgnoreCase(
+              DeviceString(devices[i],
+                           MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK),
+              device_id)) {
+        by_id = static_cast<int>(i);
+      }
+      if (by_name < 0 && !preferred_name.empty() &&
+          names[i] == preferred_name) {
+        by_name = static_cast<int>(i);
       }
     }
+
+    int chosen_index = by_id >= 0 ? by_id : by_name;
+    if (chosen_index < 0) {
+      if (wants_specific) {
+        for (UINT32 i = 0; i < count; i++) devices[i]->Release();
+        CoTaskMemFree(devices);
+        *error_out = "requested camera not found";
+        return false;
+      }
+      chosen_index = 0;
+    }
+    const UINT32 chosen = static_cast<UINT32>(chosen_index);
+    const std::string chosen_name = names[chosen];
 
     ComPtr<IMFMediaSource> source;
     hr = devices[chosen]->ActivateObject(IID_PPV_ARGS(&source));
@@ -248,6 +293,7 @@ using MethodResultPtr =
 struct Job {
   enum class Kind { kStart, kGrab, kStop, kQuit };
   Kind kind = Kind::kQuit;
+  std::string device_id;
   std::string preferred_name;
   MethodResultPtr result;
 };
@@ -356,7 +402,8 @@ class CaptureWorker {
         std::string error;
         int w = 0;
         int h = 0;
-        if (!camera->Start(job.preferred_name, &device, &w, &h, &error)) {
+        if (!camera->Start(job.device_id, job.preferred_name, &device, &w, &h,
+                           &error)) {
           camera->Stop();
           *started = false;
           return Reply::Failure("start_failed", error);
@@ -445,6 +492,11 @@ void RegisterMfCameraChannel(flutter::BinaryMessenger* messenger,
             if (it != args->end()) {
               const auto* s = std::get_if<std::string>(&it->second);
               if (s != nullptr) job.preferred_name = *s;
+            }
+            auto id = args->find(flutter::EncodableValue("deviceId"));
+            if (id != args->end()) {
+              const auto* s = std::get_if<std::string>(&id->second);
+              if (s != nullptr) job.device_id = *s;
             }
           }
         } else if (method == "grab") {
