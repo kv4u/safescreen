@@ -41,8 +41,9 @@ All notable changes to this project are documented here. Format follows
 - **The tray menu works.** Right-clicking the tray icon did nothing, because on
   Windows the app has to open the menu itself and never did. So a SafeScreen
   hidden in the tray could not be quit without Task Manager. Every exit path now
-  goes through one routine, which also removes the tray icon rather than leaving
-  a dead one behind.
+  goes through one routine. It removes the tray icon rather than leaving a dead
+  one behind, then closes the window through an ordinary close request so
+  shutdown happens in order and exit is immediate.
 - **The panel no longer pops up after every look-away when minimised to the
   tray.** When the blackout lifted, the window returned to panel size, centred
   and always-on-top, regardless of where it had been. It now goes back to the
