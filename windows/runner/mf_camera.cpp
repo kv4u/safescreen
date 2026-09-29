@@ -12,8 +12,12 @@
 #include <shlwapi.h>
 #include <wrl/client.h>
 
+#include <condition_variable>
+#include <deque>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
@@ -33,11 +37,11 @@ std::string Utf8FromWide(const wchar_t* wide, int wide_len) {
 
 // Owns the Media Foundation reader for one camera.
 //
-// Everything runs on the platform thread. ReadSample blocks until a frame is
-// available, which for a running camera is roughly one frame interval. The
-// first read after Start is slower because the sensor is still waking up, so
-// Start performs one discarded read and absorbs that delay there rather than
-// letting the first grab() appear to hang.
+// Used only from the capture thread (see CaptureWorker below). ReadSample
+// blocks until a frame is available, roughly one frame interval for a running
+// camera. The first read after Start is slower because the sensor is still
+// waking up, so Start performs one discarded read and absorbs that delay there
+// rather than letting the first grab() appear to hang.
 class MfCamera {
  public:
   ~MfCamera() { Stop(); }
@@ -219,89 +223,249 @@ class MfCamera {
   int stride_ = 0;
 };
 
-std::unique_ptr<MfCamera> g_camera;
+// ---------------------------------------------------------------------------
+// Threading
+//
+// ReadSample blocks until the sensor delivers the next frame -- roughly one
+// frame interval, several times a second. Doing that on the platform thread
+// froze the UI for that long on every grab. So a dedicated capture thread owns
+// Media Foundation outright: it creates the reader, reads from it and shuts it
+// down, in its own multithreaded COM apartment.
+//
+// Flutter replies, however, must be sent on the platform thread. The capture
+// thread therefore never touches a MethodResult: it queues the finished reply
+// and posts kMfCameraDoneMessage to the runner window, whose message handler
+// (on the platform thread) calls HandleMfCameraMessage to deliver it.
+//
+// Frames are exactly as fresh as before -- each grab still reads the next frame
+// from the sensor -- and nothing runs between grabs, so this costs no more CPU.
+// It only stops the UI thread waiting for the camera.
+// ---------------------------------------------------------------------------
+
+using MethodResultPtr =
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>;
+
+struct Job {
+  enum class Kind { kStart, kGrab, kStop, kQuit };
+  Kind kind = Kind::kQuit;
+  std::string preferred_name;
+  MethodResultPtr result;
+};
+
+struct Reply {
+  MethodResultPtr result;
+  bool ok = true;
+  flutter::EncodableValue value;
+  std::string error_code;
+  std::string error_message;
+
+  static Reply Success(flutter::EncodableValue v) {
+    Reply r;
+    r.value = std::move(v);
+    return r;
+  }
+  static Reply Failure(std::string code, std::string message) {
+    Reply r;
+    r.ok = false;
+    r.error_code = std::move(code);
+    r.error_message = std::move(message);
+    return r;
+  }
+};
+
+class CaptureWorker {
+ public:
+  explicit CaptureWorker(HWND window) : window_(window) {
+    thread_ = std::thread([this] { Run(); });
+  }
+
+  ~CaptureWorker() { Shutdown(); }
+
+  CaptureWorker(const CaptureWorker&) = delete;
+  CaptureWorker& operator=(const CaptureWorker&) = delete;
+
+  void Post(Job job) {
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      jobs_.push_back(std::move(job));
+    }
+    cv_.notify_one();
+  }
+
+  // Platform thread only: hands finished replies back to Dart.
+  void DeliverReplies() {
+    std::deque<Reply> ready;
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      ready.swap(replies_);
+    }
+    for (Reply& r : ready) {
+      if (!r.result) continue;
+      if (r.ok) {
+        r.result->Success(r.value);
+      } else {
+        r.result->Error(r.error_code, r.error_message);
+      }
+    }
+  }
+
+  // Stops the camera and joins the thread. Replies not yet delivered are
+  // dropped: the engine they would go to is being torn down.
+  void Shutdown() {
+    if (!thread_.joinable()) return;
+    Post(Job{});  // kQuit
+    thread_.join();
+    std::lock_guard<std::mutex> lock(mu_);
+    replies_.clear();
+    jobs_.clear();
+  }
+
+ private:
+  void Run() {
+    const HRESULT co = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    MfCamera camera;
+    bool started = false;
+
+    for (;;) {
+      Job job;
+      {
+        std::unique_lock<std::mutex> lock(mu_);
+        cv_.wait(lock, [this] { return !jobs_.empty(); });
+        job = std::move(jobs_.front());
+        jobs_.pop_front();
+      }
+      if (job.kind == Job::Kind::kQuit) break;
+
+      Reply reply = Handle(&camera, &started, job);
+      reply.result = std::move(job.result);
+      {
+        std::lock_guard<std::mutex> lock(mu_);
+        replies_.push_back(std::move(reply));
+      }
+      ::PostMessage(window_, kMfCameraDoneMessage, 0, 0);
+    }
+
+    camera.Stop();
+    if (SUCCEEDED(co)) CoUninitialize();
+  }
+
+  static Reply Handle(MfCamera* camera, bool* started, const Job& job) {
+    switch (job.kind) {
+      case Job::Kind::kStart: {
+        std::string device;
+        std::string error;
+        int w = 0;
+        int h = 0;
+        if (!camera->Start(job.preferred_name, &device, &w, &h, &error)) {
+          camera->Stop();
+          *started = false;
+          return Reply::Failure("start_failed", error);
+        }
+        *started = true;
+        flutter::EncodableMap out;
+        out[flutter::EncodableValue("device")] = flutter::EncodableValue(device);
+        out[flutter::EncodableValue("width")] = flutter::EncodableValue(w);
+        out[flutter::EncodableValue("height")] = flutter::EncodableValue(h);
+        return Reply::Success(flutter::EncodableValue(out));
+      }
+
+      case Job::Kind::kGrab: {
+        if (!*started) {
+          return Reply::Failure("not_started", "camera is not running");
+        }
+        std::vector<uint8_t> bytes;
+        int w = 0;
+        int h = 0;
+        int s = 0;
+        if (!camera->Grab(&bytes, &w, &h, &s)) {
+          // Null means "no frame this time", which the Dart side treats as a
+          // detector blind spot and therefore protects the screen.
+          return Reply::Success(flutter::EncodableValue());
+        }
+        flutter::EncodableMap out;
+        out[flutter::EncodableValue("bytes")] = flutter::EncodableValue(bytes);
+        out[flutter::EncodableValue("width")] = flutter::EncodableValue(w);
+        out[flutter::EncodableValue("height")] = flutter::EncodableValue(h);
+        out[flutter::EncodableValue("stride")] = flutter::EncodableValue(s);
+        return Reply::Success(flutter::EncodableValue(out));
+      }
+
+      case Job::Kind::kStop:
+        camera->Stop();
+        *started = false;
+        return Reply::Success(flutter::EncodableValue());
+
+      case Job::Kind::kQuit:
+        break;
+    }
+    return Reply::Success(flutter::EncodableValue());
+  }
+
+  HWND window_;
+  std::mutex mu_;
+  std::condition_variable cv_;
+  std::deque<Job> jobs_;
+  std::deque<Reply> replies_;
+  // Declared last so every member above exists before the thread starts.
+  std::thread thread_;
+};
+
+std::unique_ptr<CaptureWorker> g_worker;
 
 // The channel must outlive RegisterMfCameraChannel for the handler to keep
-// receiving messages, so it is retained for the life of the process.
+// receiving messages, so it is retained until ShutdownMfCamera.
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_channel;
 
 }  // namespace
 
-void RegisterMfCameraChannel(flutter::BinaryMessenger* messenger) {
+void RegisterMfCameraChannel(flutter::BinaryMessenger* messenger,
+                             HWND window) {
+  g_worker = std::make_unique<CaptureWorker>(window);
   g_channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
       messenger, "safescreen/camera",
       &flutter::StandardMethodCodec::GetInstance());
 
   g_channel->SetMethodCallHandler(
       [](const flutter::MethodCall<flutter::EncodableValue>& call,
-         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
-             result) {
+         MethodResultPtr result) {
+        if (!g_worker) {
+          result->Error("shut_down", "capture has been shut down");
+          return;
+        }
         const std::string& method = call.method_name();
+        Job job;
+        job.result = std::move(result);
 
         if (method == "start") {
-          std::string preferred;
+          job.kind = Job::Kind::kStart;
           const auto* args =
               std::get_if<flutter::EncodableMap>(call.arguments());
           if (args != nullptr) {
             auto it = args->find(flutter::EncodableValue("deviceName"));
             if (it != args->end()) {
               const auto* s = std::get_if<std::string>(&it->second);
-              if (s != nullptr) preferred = *s;
+              if (s != nullptr) job.preferred_name = *s;
             }
           }
-
-          if (!g_camera) g_camera = std::make_unique<MfCamera>();
-          std::string device;
-          std::string error;
-          int w = 0;
-          int h = 0;
-          if (!g_camera->Start(preferred, &device, &w, &h, &error)) {
-            g_camera.reset();
-            result->Error("start_failed", error);
-            return;
-          }
-          flutter::EncodableMap out;
-          out[flutter::EncodableValue("device")] =
-              flutter::EncodableValue(device);
-          out[flutter::EncodableValue("width")] = flutter::EncodableValue(w);
-          out[flutter::EncodableValue("height")] = flutter::EncodableValue(h);
-          result->Success(flutter::EncodableValue(out));
+        } else if (method == "grab") {
+          job.kind = Job::Kind::kGrab;
+        } else if (method == "stop") {
+          job.kind = Job::Kind::kStop;
+        } else {
+          job.result->NotImplemented();
           return;
         }
-
-        if (method == "grab") {
-          if (!g_camera) {
-            result->Error("not_started", "camera is not running");
-            return;
-          }
-          std::vector<uint8_t> bytes;
-          int w = 0;
-          int h = 0;
-          int s = 0;
-          if (!g_camera->Grab(&bytes, &w, &h, &s)) {
-            // Null means "no frame this time", which the Dart side treats as a
-            // detector blind spot and therefore protects the screen.
-            result->Success(flutter::EncodableValue());
-            return;
-          }
-          flutter::EncodableMap out;
-          out[flutter::EncodableValue("bytes")] = flutter::EncodableValue(bytes);
-          out[flutter::EncodableValue("width")] = flutter::EncodableValue(w);
-          out[flutter::EncodableValue("height")] = flutter::EncodableValue(h);
-          out[flutter::EncodableValue("stride")] = flutter::EncodableValue(s);
-          result->Success(flutter::EncodableValue(out));
-          return;
-        }
-
-        if (method == "stop") {
-          if (g_camera) {
-            g_camera->Stop();
-            g_camera.reset();
-          }
-          result->Success(flutter::EncodableValue());
-          return;
-        }
-
-        result->NotImplemented();
+        g_worker->Post(std::move(job));
       });
+}
+
+bool HandleMfCameraMessage(UINT message) {
+  if (message != kMfCameraDoneMessage) return false;
+  if (g_worker) g_worker->DeliverReplies();
+  return true;
+}
+
+void ShutdownMfCamera() {
+  g_channel.reset();
+  g_worker.reset();
 }

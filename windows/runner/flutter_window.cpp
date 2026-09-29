@@ -27,7 +27,8 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   // SafeScreen's own in-memory capture channel, so frames never reach the disk.
-  RegisterMfCameraChannel(flutter_controller_->engine()->messenger());
+  RegisterMfCameraChannel(flutter_controller_->engine()->messenger(),
+                          GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -43,6 +44,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  // Join the capture thread and release the camera before the engine goes, so
+  // no reply is ever delivered to a destroyed engine.
+  ShutdownMfCamera();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -54,6 +58,12 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // Frame replies from the capture thread, delivered here so they are sent on
+  // the platform thread as Flutter requires.
+  if (HandleMfCameraMessage(message)) {
+    return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

@@ -17,13 +17,28 @@
 #define RUNNER_MF_CAMERA_H_
 
 #include <flutter/binary_messenger.h>
+#include <windows.h>
+
+// Posted by the capture thread to the runner window when a reply is ready.
+// The window's message handler must pass it to HandleMfCameraMessage.
+constexpr UINT kMfCameraDoneMessage = WM_APP + 0x5C;
 
 // Registers the "safescreen/camera" method channel on the engine's messenger.
+// |window| receives kMfCameraDoneMessage, so replies can be delivered on the
+// platform thread.
 //
 // Methods:
 //   start(deviceName: String?) -> {width: int, height: int, device: String}
 //   grab()                     -> {bytes: Uint8List, width, height, stride}
 //   stop()                     -> null
-void RegisterMfCameraChannel(flutter::BinaryMessenger* messenger);
+void RegisterMfCameraChannel(flutter::BinaryMessenger* messenger, HWND window);
+
+// Call from the runner window's message handler. Returns true if |message| was
+// the capture thread's reply notification and has been handled.
+bool HandleMfCameraMessage(UINT message);
+
+// Stops the camera and joins the capture thread. Call before the engine is
+// destroyed.
+void ShutdownMfCamera();
 
 #endif  // RUNNER_MF_CAMERA_H_
