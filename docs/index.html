@@ -271,6 +271,12 @@ section { padding: var(--s7) 0; }
 }
 .trig:hover { background: var(--ink); color: var(--paper); }
 .caption { margin: var(--s3) 0 0; font-size: 12.5px; color: var(--mute); max-width: 70ch; }
+/* Screenshots: flex-grow matches each image's pixel width, so both scale by
+   the same factor and their text renders at the same size side by side. */
+.shots { display: flex; gap: var(--s3); align-items: flex-start; margin-top: var(--s6); max-width: 760px; }
+.shots img { display: block; width: 100%; height: auto; min-width: 0; }
+.shots .s-home { flex: 747 1 0; }
+.shots .s-prot { flex: 648 1 0; }
 .caption b { color: var(--ink); font-weight: 700; }
 
 /* ── Numbered list blocks ────────────────────────────────────────────── */
@@ -400,6 +406,14 @@ footer .spacer { margin-left: auto; }
     <b>One disqualifying frame hides; three consecutive good ones reveal.</b>
     Switch tabs or move your cursor off the page and it will protect itself.
   </p>
+
+  <div class="shots">
+    <img class="s-home" src="screenshots/home.png" width="747" height="1397" loading="lazy"
+         alt="SafeScreen home panel: camera, sensitivity and shoulder-surfer settings, ready to start protection">
+    <img class="s-prot" src="screenshots/protecting.png" width="648" height="986" loading="lazy"
+         alt="SafeScreen while protecting: screen visible, head yaw and roll, frames held in memory">
+  </div>
+  <p class="caption">The app itself. Left, ready to start; right, protecting, with frames held in memory and nothing written to disk.</p>
 
   <!-- Datasheet block sits below the demo: the screen is the hook, the spec
        table is the detail you read once the hook has landed. Keeping it here

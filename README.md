@@ -55,6 +55,11 @@ goes black until you are the only one looking at it again.
 - **Tray-resident.** Minimises out of the way and keeps working.
 - **No network. No telemetry. No account.** Nothing leaves your machine.
 
+<p align="center">
+  <img src="docs/screenshots/home.png" width="374" alt="SafeScreen home panel, ready to start protection">
+  <img src="docs/screenshots/protecting.png" width="324" alt="SafeScreen while protecting, with frames held in memory">
+</p>
+
 ## Install
 
 Download `SafeScreen-windows-x64.zip` from the
