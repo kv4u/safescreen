@@ -75,8 +75,12 @@ void main() {
       );
     });
 
-    test('one answer is enough to report none', () {
-      expect(const CameraEffects(backgroundBlur: false).summary, 'None');
+    test('one answer is not enough to report none', () {
+      expect(
+        const CameraEffects(backgroundBlur: false).summary,
+        'Framing unknown',
+      );
+      expect(const CameraEffects(autoFraming: false).summary, 'Blur unknown');
     });
 
     test('names what is on', () {

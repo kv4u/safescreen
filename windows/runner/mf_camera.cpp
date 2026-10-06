@@ -312,11 +312,30 @@ class MfCamera {
     ULONG returned = 0;
     HRESULT hr = ks_->KsProperty(&prop, sizeof(prop), buffer, sizeof(buffer),
                                  &returned);
-    if (FAILED(hr) || returned < sizeof(KSCAMERA_EXTENDEDPROP_HEADER)) {
-      return -1;
+    if (FAILED(hr)) return -1;
+
+    // Where the header sits is not something to assume. Through this path the
+    // Windows Studio Effects pipeline returns it 16 bytes into the buffer,
+    // after a block of zeros, while the WinRT camera API strips that prefix.
+    // Reading from offset 0 there took the header's version and size fields
+    // for its flags and capability, and reported blur that was on as off.
+    // So accept a header only where it is self-consistent: version 1 (the
+    // only one defined) and a size that fits in what was returned.
+    const KSCAMERA_EXTENDEDPROP_HEADER* header = nullptr;
+    for (ULONG offset : {0UL, 16UL}) {
+      if (returned < offset + sizeof(KSCAMERA_EXTENDEDPROP_HEADER)) continue;
+      const auto* candidate =
+          reinterpret_cast<const KSCAMERA_EXTENDEDPROP_HEADER*>(buffer +
+                                                                offset);
+      if (candidate->Version == 1 &&
+          candidate->Size >= sizeof(KSCAMERA_EXTENDEDPROP_HEADER) &&
+          offset + candidate->Size <= returned) {
+        header = candidate;
+        break;
+      }
     }
-    const auto* header =
-        reinterpret_cast<const KSCAMERA_EXTENDEDPROP_HEADER*>(buffer);
+    if (header == nullptr) return -1;
+
     // A camera that cannot apply the effect at all is not applying it.
     if ((header->Capability & on_mask) == 0) return 0;
     return (header->Flags & on_mask) != 0 ? 1 : 0;

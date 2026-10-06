@@ -56,7 +56,13 @@ class CameraEffects {
     }
     if (backgroundBlur == true) return 'Background blur on';
     if (autoFraming == true) return 'Auto framing on';
-    return isReported ? 'None' : 'Not reported';
+    // "None" only when the camera has answered for both. One answer is not
+    // enough: reporting "None" while blur went unanswered is how a real blur
+    // could hide behind a reassuring label.
+    if (backgroundBlur == false && autoFraming == false) return 'None';
+    if (backgroundBlur == false) return 'Framing unknown';
+    if (autoFraming == false) return 'Blur unknown';
+    return 'Not reported';
   }
 
   @override
