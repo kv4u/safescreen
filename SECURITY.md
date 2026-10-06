@@ -114,20 +114,31 @@ available it says so in the panel rather than claiming protection it cannot
 give. See `lib/services/camera_selection.dart`.
 
 **Windows Studio Effects** — on Copilot+ hardware, Windows applies the same
-class of processing inside the OS camera pipeline, to the physical device.
-SafeScreen cannot detect or avoid this; the device name is unchanged and the
-frames simply arrive already processed. Three of its effects matter here:
+class of processing inside the OS camera pipeline, to the physical device. The
+device name is unchanged and the frames simply arrive already processed, so it
+cannot be avoided the way a virtual camera can. Two of its effects matter here:
 
 | Effect | Consequence |
 |---|---|
 | Background blur | A shoulder surfer is blurred out of the frame |
 | Automatic framing | The crop follows you, cutting others out entirely |
-| Eye contact | Eyes are synthetically redirected toward the camera, which can make looking away undetectable |
 
-Eye contact correction is the most serious: it attacks look-away detection
-itself, not just the shoulder-surfer feature. **If you are on a Copilot+ PC,
-turn Studio Effects off for SafeScreen** in Settings → Bluetooth & devices →
-Cameras.
+SafeScreen **asks the camera** whether either is on, when protection starts and
+every few seconds after, since both can be switched on mid-session from quick
+settings. When one is, the panel says so: the **Effects** row names it and
+**Shoulder** changes from "Watching" to "Limited". Detection keeps running; it is
+a warning, not a fix. Turn the effect off in Settings → Bluetooth & devices →
+Cameras if you rely on shoulder-surfer detection.
+
+This depends on the camera answering. Studio Effects and capable drivers report
+these through the standard extended camera controls; a camera that does not
+answer shows **Effects: Not reported**, which means unknown, not off. The check
+is only possible on the in-memory capture path, so the fallback path always
+shows Not reported.
+
+Eye-contact correction is not reported, because it does not affect detection:
+it moves only the pupils, and SafeScreen judges where you are looking from head
+pose — the positions of eyes, nose, mouth and ears — not from gaze direction.
 
 More generally: SafeScreen trusts the frames it is given. Any layer between the
 sensor and the app can lie to it, and there is no way from user space to prove

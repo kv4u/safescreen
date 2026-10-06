@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'bmp_encoder.dart';
+import 'camera_effects.dart';
 
 class NativeCameraCapture {
   static const MethodChannel _channel = MethodChannel('safescreen/camera');
@@ -92,6 +93,21 @@ class NativeCameraCapture {
     } catch (e) {
       debugPrint('SafeScreen: in-memory grab failed ($e)');
       return null;
+    }
+  }
+
+  /// Asks the camera whether it is blurring the background or auto-framing.
+  ///
+  /// Never throws; anything unexpected reads as [CameraEffects.unknown].
+  Future<CameraEffects> queryEffects() async {
+    if (!_running) return CameraEffects.unknown;
+    try {
+      return CameraEffects.fromReply(
+        await _channel.invokeMethod<Object?>('effects'),
+      );
+    } catch (e) {
+      debugPrint('SafeScreen: camera effects query failed ($e)');
+      return CameraEffects.unknown;
     }
   }
 

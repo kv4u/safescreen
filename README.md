@@ -157,8 +157,9 @@ Flickering to "visible" is a privacy failure. They are not weighted equally.
 - **Camera effects defeat shoulder-surfer detection.** Background blur or
   replacement erases anyone standing behind you before SafeScreen sees the
   frame. It now prefers a physical camera over virtual ones and warns when it
-  cannot, but Windows Studio Effects applies to the physical device itself and
-  is undetectable from here — turn it off.
+  cannot. Windows Studio Effects applies to the physical device itself, so it
+  cannot be avoided; SafeScreen asks the camera whether blur or automatic
+  framing is on and marks shoulder-surfer detection as limited when it is.
   See [SECURITY.md](SECURITY.md#camera-effects).
 - **Not a lock screen.** SafeScreen does not authenticate anyone and will not
   stop someone using your keyboard. Use `Win`+`L`.

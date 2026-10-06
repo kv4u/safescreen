@@ -5,6 +5,10 @@
 
 #include <windows.h>
 
+// ks.h must precede ksmedia.h and ksproxy.h.
+#include <ks.h>
+#include <ksmedia.h>
+#include <ksproxy.h>
 #include <mfapi.h>
 #include <mferror.h>
 #include <mfidl.h>
@@ -150,6 +154,10 @@ class MfCamera {
       return false;
     }
 
+    // Kept for QueryEffects. Optional: a camera that does not expose its
+    // controls still captures, it just cannot be asked about effects.
+    source.As(&ks_);
+
     ComPtr<IMFAttributes> reader_attrs;
     hr = MFCreateAttributes(&reader_attrs, 1);
     if (SUCCEEDED(hr)) {
@@ -249,7 +257,36 @@ class MfCamera {
     return true;
   }
 
+  // Asks the camera whether it is applying effects that can remove a second
+  // person from the picture. Each value is 1 (on), 0 (off) or -1 (the camera
+  // did not say). See lib/services/camera_effects.dart for why these two and
+  // not eye-contact correction.
+  //
+  // Windows Studio Effects and capable drivers expose these through the
+  // standard extended camera controls, and they can be toggled at any time from
+  // Settings or the quick-settings flyout, so the Dart side asks periodically.
+  void QueryEffects(int* blur, int* framing) {
+    *blur = -1;
+    *framing = -1;
+    if (!ks_) return;
+#ifdef KSCAMERA_EXTENDEDPROP_BACKGROUNDSEGMENTATION_BLUR
+    ULONGLONG blur_mask = KSCAMERA_EXTENDEDPROP_BACKGROUNDSEGMENTATION_BLUR;
+#ifdef KSCAMERA_EXTENDEDPROP_BACKGROUNDSEGMENTATION_SHALLOWFOCUS
+    // "Portrait" blur. MASK is not included: it only attaches a segmentation
+    // mask as metadata and leaves the picture itself untouched.
+    blur_mask |= KSCAMERA_EXTENDEDPROP_BACKGROUNDSEGMENTATION_SHALLOWFOCUS;
+#endif
+    *blur = ExtendedFlag(KSPROPERTY_CAMERACONTROL_EXTENDED_BACKGROUNDSEGMENTATION,
+                         blur_mask);
+#endif
+#ifdef KSCAMERA_EXTENDEDPROP_DIGITALWINDOW_AUTOFACEFRAMING
+    *framing = ExtendedFlag(KSPROPERTY_CAMERACONTROL_EXTENDED_DIGITALWINDOW,
+                            KSCAMERA_EXTENDEDPROP_DIGITALWINDOW_AUTOFACEFRAMING);
+#endif
+  }
+
   void Stop() {
+    ks_.Reset();
     reader_.Reset();
     if (mf_started_) {
       MFShutdown();
@@ -261,6 +298,31 @@ class MfCamera {
   }
 
  private:
+  // Reads one extended camera control and reports whether any bit of |on_mask|
+  // is set: 1 on, 0 off, -1 not answered.
+  int ExtendedFlag(ULONG id, ULONGLONG on_mask) {
+    KSPROPERTY prop = {};
+    prop.Set = KSPROPERTYSETID_ExtendedCameraControl;
+    prop.Id = id;
+    prop.Flags = KSPROPERTY_TYPE_GET;
+
+    // The header, plus room for whichever payload this control carries; the
+    // digital window's is larger than a plain value.
+    alignas(8) BYTE buffer[sizeof(KSCAMERA_EXTENDEDPROP_HEADER) + 256] = {};
+    ULONG returned = 0;
+    HRESULT hr = ks_->KsProperty(&prop, sizeof(prop), buffer, sizeof(buffer),
+                                 &returned);
+    if (FAILED(hr) || returned < sizeof(KSCAMERA_EXTENDEDPROP_HEADER)) {
+      return -1;
+    }
+    const auto* header =
+        reinterpret_cast<const KSCAMERA_EXTENDEDPROP_HEADER*>(buffer);
+    // A camera that cannot apply the effect at all is not applying it.
+    if ((header->Capability & on_mask) == 0) return 0;
+    return (header->Flags & on_mask) != 0 ? 1 : 0;
+  }
+
+  ComPtr<IKsControl> ks_;
   ComPtr<IMFSourceReader> reader_;
   bool mf_started_ = false;
   int width_ = 0;
@@ -291,7 +353,7 @@ using MethodResultPtr =
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>;
 
 struct Job {
-  enum class Kind { kStart, kGrab, kStop, kQuit };
+  enum class Kind { kStart, kGrab, kEffects, kStop, kQuit };
   Kind kind = Kind::kQuit;
   std::string device_id;
   std::string preferred_name;
@@ -437,6 +499,22 @@ class CaptureWorker {
         return Reply::Success(flutter::EncodableValue(out));
       }
 
+      case Job::Kind::kEffects: {
+        int blur = -1;
+        int framing = -1;
+        if (*started) camera->QueryEffects(&blur, &framing);
+        // Unanswered is sent as null, never as false: "the camera did not say"
+        // must not read as "off".
+        auto encode = [](int v) {
+          return v < 0 ? flutter::EncodableValue()
+                       : flutter::EncodableValue(v == 1);
+        };
+        flutter::EncodableMap out;
+        out[flutter::EncodableValue("backgroundBlur")] = encode(blur);
+        out[flutter::EncodableValue("autoFraming")] = encode(framing);
+        return Reply::Success(flutter::EncodableValue(out));
+      }
+
       case Job::Kind::kStop:
         camera->Stop();
         *started = false;
@@ -501,6 +579,8 @@ void RegisterMfCameraChannel(flutter::BinaryMessenger* messenger,
           }
         } else if (method == "grab") {
           job.kind = Job::Kind::kGrab;
+        } else if (method == "effects") {
+          job.kind = Job::Kind::kEffects;
         } else if (method == "stop") {
           job.kind = Job::Kind::kStop;
         } else {

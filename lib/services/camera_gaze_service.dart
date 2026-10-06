@@ -21,6 +21,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:face_detection_tflite/face_detection_tflite.dart' as tflite;
 
+import 'camera_effects.dart';
 import 'camera_selection.dart';
 import 'gaze_detector_service.dart';
 import 'head_pose_estimator.dart';
@@ -103,6 +104,20 @@ class CameraGazeService {
   /// True when frames come from the in-memory Media Foundation path and never
   /// touch the disk. False means the takePicture fallback is in use.
   bool get isInMemoryCapture => _nativeCamera.isRunning;
+
+  CameraEffects _effects = CameraEffects.unknown;
+  DateTime? _effectsCheckedAt;
+
+  /// Effects the camera reports applying before frames reach the detector.
+  ///
+  /// Only the in-memory path can ask; on the fallback path this stays
+  /// [CameraEffects.unknown]. It is a warning and nothing more: the detector
+  /// keeps running, and the UI says plainly that shoulder-surfer detection is
+  /// limited rather than reporting protection it cannot give.
+  CameraEffects get effects => _effects;
+
+  /// Effects can be switched on mid-session from Settings or quick settings.
+  static const Duration _effectsCheckInterval = Duration(seconds: 5);
 
   Uint8List? _lastFrame;
 
@@ -300,6 +315,12 @@ class CameraGazeService {
       // In-memory first; the disk path is the fallback, not the default.
       Uint8List? bytes;
       if (_nativeCamera.isRunning) {
+        final DateTime now = DateTime.now();
+        if (_effectsCheckedAt == null ||
+            now.difference(_effectsCheckedAt!) >= _effectsCheckInterval) {
+          _effectsCheckedAt = now;
+          _effects = await _nativeCamera.queryEffects();
+        }
         bytes = await _nativeCamera.grabFrame();
         _lastFrame = keepPreviewFrame ? bytes : null;
       } else {
@@ -512,6 +533,8 @@ class CameraGazeService {
     _cameraDeviceId = null;
     _isVirtualCamera = false;
     _lastFrame = null;
+    _effects = CameraEffects.unknown;
+    _effectsCheckedAt = null;
 
     // Last line of defence: destroy any capture file that outlived its read.
     await _frameStore.sweep();

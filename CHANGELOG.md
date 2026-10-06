@@ -6,6 +6,18 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Warns when the camera is blurring the background or auto-framing.**
+  Windows Studio Effects on Copilot+ PCs applies both inside the camera itself,
+  under its normal name, so the virtual-camera check could not see them. Either
+  one can remove a person standing behind you from the picture, and
+  shoulder-surfer detection would keep saying "Watching" while seeing nothing.
+  SafeScreen now asks the camera at start and every few seconds; when either
+  effect is on, the panel names it and marks shoulder-surfer detection as
+  limited. A camera that does not answer is shown as "Not reported", never as
+  off.
+
 ## [1.0.1] — 2026-10-06
 
 ### Added

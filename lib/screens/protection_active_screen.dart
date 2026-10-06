@@ -14,6 +14,7 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../services/app_exit.dart';
+import '../services/camera_effects.dart';
 import '../services/camera_gaze_service.dart';
 import '../services/display_geometry.dart';
 import '../services/gaze_detector_service.dart';
@@ -443,6 +444,10 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
     final Color tone = isVisible ? C.clear : C.signal;
     final HeadPose? pose = _cameraGazeService.lastPose;
     final int failures = _cameraGazeService.shredFailures;
+    final CameraEffects effects = _cameraGazeService.effects;
+    final bool shoulderLimited =
+        _gazeDetector.detectShoulderSurfers &&
+        (_cameraGazeService.isVirtualCamera || effects.hidesOthers);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,12 +515,19 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
         const Rule(faint: true),
         SpecRow(
           label: 'Shoulder',
-          value:
-              _cameraGazeService.isVirtualCamera
-                  ? 'Unreliable — effects cam'
-                  : (_gazeDetector.detectShoulderSurfers ? 'Watching' : 'Off'),
-          valueColor: _cameraGazeService.isVirtualCamera ? C.signal : C.ink,
-          emphasis: _cameraGazeService.isVirtualCamera,
+          value: _shoulderLabel,
+          valueColor: shoulderLimited ? C.signal : C.ink,
+          emphasis: shoulderLimited,
+        ),
+        const Rule(faint: true),
+        SpecRow(
+          label: 'Effects',
+          value: effects.summary,
+          valueColor:
+              effects.hidesOthers
+                  ? C.signal
+                  : (effects.isReported ? C.ink : C.inkMuted),
+          emphasis: effects.hidesOthers,
         ),
         const Rule(faint: true),
         SpecRow(
@@ -558,6 +570,18 @@ class _ProtectionActiveScreenState extends State<ProtectionActiveScreen>
         ),
       ],
     );
+  }
+
+  /// Shoulder-surfer status, owning up to anything that blinds it. A virtual
+  /// camera or an effect that blurs or crops out the background means a second
+  /// face may never reach the detector, and "Watching" would be a false claim.
+  String get _shoulderLabel {
+    if (!_gazeDetector.detectShoulderSurfers) return 'Off';
+    if (_cameraGazeService.isVirtualCamera) return 'Unreliable — effects cam';
+    final CameraEffects effects = _cameraGazeService.effects;
+    if (effects.backgroundBlur == true) return 'Limited — blur on';
+    if (effects.autoFraming == true) return 'Limited — framing on';
+    return 'Watching';
   }
 
   String get _captureModeLabel {
