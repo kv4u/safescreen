@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-10-06
+
 ### Added
 
 - **Start with Windows.** A tray utility that has to be launched by hand after
@@ -164,5 +166,6 @@ First public release. Windows is the supported platform.
   [SECURITY.md](SECURITY.md#camera-effects).
 - Android support is experimental and unsupported.
 
-[Unreleased]: https://github.com/kv4u/safescreen/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/kv4u/safescreen/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/kv4u/safescreen/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/kv4u/safescreen/releases/tag/v1.0.0

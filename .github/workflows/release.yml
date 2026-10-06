@@ -100,14 +100,15 @@ jobs:
 
             ## How camera frames are handled
 
-            The Windows camera plugin has no streaming API, so each frame is
-            written to disk before SafeScreen can see it — by default into your
-            OneDrive-synced Pictures folder. SafeScreen ships a forked plugin
-            that redirects those writes into private temp storage, then
-            overwrites and deletes each file the instant it is read.
+            Frames are captured straight into memory through SafeScreen's own
+            Media Foundation path, and nothing is written to disk. The status
+            console shows **FRAMES: In memory** when this path is live.
 
-            Frames stay on your machine and do not outlive their read, but they
-            are written briefly.
+            On machines where that will not start, SafeScreen falls back to the
+            Flutter camera plugin, which can only produce a frame by writing it
+            to disk. Those writes are redirected away from your OneDrive-synced
+            Pictures folder into private temp storage, and each file is
+            overwritten and deleted the instant it is read.
             **[The complete account is in SECURITY.md](https://github.com/kv4u/safescreen/blob/main/SECURITY.md#how-camera-frames-are-handled)**.
 
             ## Verify your download
