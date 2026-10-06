@@ -80,6 +80,22 @@ GitHub Actions from a tagged commit and carry a provenance attestation:
 gh attestation verify SafeScreen-windows-x64.zip --repo kv4u/safescreen
 ```
 
+### Antivirus asks for webcam permission
+
+Security suites with webcam protection (ESET, Kaspersky, Bitdefender and
+others) ask before any program uses the camera. That prompt is expected, and it
+is doing its job: SafeScreen does not try to get around it.
+
+To stop it asking every time:
+
+- Tick **Remember** (or "Remember for this application") before clicking
+  **Allow**, or add `safe_screen.exe` as an allowed app in the suite's webcam
+  protection rules.
+- Keep SafeScreen in one fixed folder, such as `C:\Apps\SafeScreen`, and
+  update by replacing the files there. These rules are tied to the program's
+  location, so a copy unzipped somewhere new is treated as a new program and
+  asked about again.
+
 ## How it works
 
 ```
